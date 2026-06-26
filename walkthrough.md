@@ -61,3 +61,16 @@ We have successfully implemented and verified all objectives for **Phase 3** (An
 
 - **Build output**: `npm run build` compiled without a single TypeScript or Astro error.
 - **Server response**: `npm run dev` starts successfully on port 4321 and returns `200 OK`.
+
+---
+
+## ── Post-Phase 4 Resolution: Runtime Black Screen Fix ─────────────────────────
+
+### 11. Typo in Class Component Children Access
+- **The Issue**: In [ErrorBoundary.tsx](file:///D:/betting%20project/nuclear-nebula/src/components/shared/ErrorBoundary.tsx), the `render()` method returned `this.children` instead of `this.props.children`.
+- **The Impact**: In React class components, `children` are only accessible via `this.props.children`. Returning `this.children` returned `undefined`, which crashes React 19's render path inside the Astro React island wrapper, aborting mount flow completely and causing a blank black screen.
+- **The Fix**: Changed `return this.children;` to `return this.props.children;` inside [ErrorBoundary.tsx](file:///D:/betting%20project/nuclear-nebula/src/components/shared/ErrorBoundary.tsx).
+
+### 12. Client Hydration Guard
+- **The Fix**: Hardened the rehydration listener in [App.tsx](file:///D:/betting%20project/nuclear-nebula/src/components/App.tsx) by checking if `useBetStore.persist` is available before calling state rehydration hooks, which safely guards against empty render states in non-browser execution scopes.
+
