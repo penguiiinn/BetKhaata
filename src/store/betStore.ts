@@ -219,10 +219,10 @@ function sanitizePersistedState(
     };
   };
 
-  const bets = (betsArr ? betsArr : fallback.bets).map(safeBet).filter((x): x is Bet => !!x);
+  const bets = (betsArr ? betsArr : fallback.bets).map(safeBet).filter((x: Bet | null): x is Bet => !!x);
   const bankrolls = (bankrollsArr ? bankrollsArr : fallback.bankrolls)
     .map(safeBankroll)
-    .filter((x): x is Bankroll => !!x);
+    .filter((x: Bankroll | null): x is Bankroll => !!x);
 
   // matches/transactions/history: keep permissive since they’re used in UI charts; if corrupted, fallback.
   const matches = matchesArr && matchesArr.length > 0 ? (matchesArr as any) : fallback.matches;
