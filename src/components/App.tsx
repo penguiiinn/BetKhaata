@@ -15,14 +15,14 @@ import EditBetModal from './shared/EditBetModal';
 import ErrorBoundary from './shared/ErrorBoundary';
 import { SkeletonCard, SkeletonChart, SkeletonBase } from './shared/SkeletonLoader';
 
-export default function App() {
+function MainApp() {
   const activeTab = useBetStore((s) => s.activeTab);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     // Listen for hydration status changes
     const unsubHydrate = useBetStore.persist.onHydrate(() => setHydrated(false));
-    const unsubFinishHydrate = useBetStore.persist.onFinishHydrate(() => setHydrated(true));
+    const unsubFinishHydrate = useBetStore.persist.onFinishHydration(() => setHydrated(true));
 
     // Initialize with current status
     setHydrated(useBetStore.persist.hasHydrated());
@@ -137,23 +137,29 @@ export default function App() {
   };
 
   return (
+    <div className="min-h-screen bg-dark text-white font-sans">
+      <Header />
+
+      <main className="pt-14 pb-20">
+        {hydrated ? renderScreen() : renderSkeletonScreen()}
+      </main>
+
+      <BottomNav />
+
+      {/* Global Modals */}
+      <AddBetModal />
+      <DepositModal />
+      <WithdrawModal />
+      <SetLimitModal />
+      <EditBetModal />
+    </div>
+  );
+}
+
+export default function App() {
+  return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-dark text-white font-sans">
-        <Header />
-
-        <main className="pt-14 pb-20">
-          {hydrated ? renderScreen() : renderSkeletonScreen()}
-        </main>
-
-        <BottomNav />
-
-        {/* Global Modals */}
-        <AddBetModal />
-        <DepositModal />
-        <WithdrawModal />
-        <SetLimitModal />
-        <EditBetModal />
-      </div>
+      <MainApp />
     </ErrorBoundary>
   );
 }
