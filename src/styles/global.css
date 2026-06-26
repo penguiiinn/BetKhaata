@@ -1,0 +1,238 @@
+@import "tailwindcss";
+
+/* ── BetKhaata Design Tokens ─────────────────────────────────────────── */
+
+@theme {
+  --color-dark: #0A0B0F;
+  --color-dark-alt: #0F1118;
+  --color-surface: #171A21;
+  --color-surface-light: #1E222D;
+  --color-surface-lighter: #252A36;
+  --color-profit: #00C896;
+  --color-profit-dim: #00A87D;
+  --color-loss: #FF5C72;
+  --color-loss-dim: #D94A5E;
+  --color-gold: #F5A623;
+  --color-gold-dim: #D4891A;
+  --color-muted: #8B8FA3;
+  --color-dim: #4A4E5A;
+  --color-purple: #6C5CE7;
+
+  --font-family-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  --animate-fade-in: fadeIn 0.5s ease-out forwards;
+  --animate-slide-up: slideUp 0.4s ease-out forwards;
+  --animate-slide-down: slideDown 0.3s ease-out forwards;
+  --animate-scale-in: scaleIn 0.3s ease-out forwards;
+  --animate-pulse-soft: pulseSoft 2s ease-in-out infinite;
+  --animate-shimmer: shimmer 2s linear infinite;
+}
+
+/* ── Keyframes ───────────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Base Styles ─────────────────────────────────────────────────────── */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2A2D38 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2A2D38;
+  border-radius: 4px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #0A0B0F;
+  color: #FFFFFF;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ── Utility Classes ─────────────────────────────────────────────────── */
+
+.glass {
+  background: rgba(23, 26, 33, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.glass-heavy {
+  background: rgba(10, 11, 15, 0.92);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+}
+
+.card-border {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.card-border-hover:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.gradient-hero {
+  background: linear-gradient(135deg, #1a1f2e 0%, #141825 40%, #1a1225 100%);
+}
+
+.gradient-gold {
+  background: linear-gradient(135deg, #F5A623 0%, #D4891A 100%);
+}
+
+.gradient-profit {
+  background: linear-gradient(135deg, #00C896 0%, #00A87D 100%);
+}
+
+.gradient-loss {
+  background: linear-gradient(135deg, #FF5C72 0%, #D94A5E 100%);
+}
+
+.glow-profit {
+  box-shadow: 0 0 24px rgba(0, 200, 150, 0.12);
+}
+
+.glow-loss {
+  box-shadow: 0 0 24px rgba(255, 92, 114, 0.12);
+}
+
+.glow-gold {
+  box-shadow: 0 0 24px rgba(245, 166, 35, 0.15);
+}
+
+.glow-gold-strong {
+  box-shadow: 0 0 20px rgba(245, 166, 35, 0.3);
+}
+
+/* Hide scrollbar but allow scrolling */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Live indicator dot */
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #FF5C72;
+  animation: pulseSoft 1.5s ease-in-out infinite;
+}
+
+/* Stagger animation delay helpers */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+
+/* Tap effect for mobile */
+.tap-effect {
+  transition: transform 0.1s ease;
+}
+.tap-effect:active {
+  transform: scale(0.97);
+}
+
+/* Input styles */
+.input-dark {
+  background: #0F1118;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #FFFFFF;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+  width: 100%;
+}
+.input-dark:focus {
+  border-color: #F5A623;
+}
+.input-dark::placeholder {
+  color: #4A4E5A;
+}
+
+/* Select styles */
+.select-dark {
+  background: #0F1118;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #FFFFFF;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+  width: 100%;
+  appearance: none;
+  cursor: pointer;
+}
+.select-dark:focus {
+  border-color: #F5A623;
+}
+
+/* Progress bar */
+.progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
