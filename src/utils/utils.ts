@@ -159,9 +159,14 @@ export function getFormatColor(format: string): string {
 
 export function computeStreaks(
   bets: { status: BetStatus; timePlaced: string }[],
-): { bestWin: number; worstLoss: number } {
+): {
+  bestWin: number;
+  worstLoss: number;
+  currentStreakType: 'win' | 'loss' | 'none';
+  currentStreakLength: number;
+} {
   const settled = bets
-    .filter((b) => b.status === 'won' || b.status === 'lost')
+    .filter((b) => b && (b.status === 'won' || b.status === 'lost'))
     .sort(
       (a, b) =>
         new Date(a.timePlaced).getTime() - new Date(b.timePlaced).getTime(),
@@ -184,7 +189,23 @@ export function computeStreaks(
     }
   }
 
-  return { bestWin, worstLoss };
+  let currentStreakType: 'win' | 'loss' | 'none' = 'none';
+  let currentStreakLength = 0;
+
+  if (currentWin > 0) {
+    currentStreakType = 'win';
+    currentStreakLength = currentWin;
+  } else if (currentLoss > 0) {
+    currentStreakType = 'loss';
+    currentStreakLength = currentLoss;
+  }
+
+  return {
+    bestWin,
+    worstLoss,
+    currentStreakType,
+    currentStreakLength,
+  };
 }
 
 // ── Edge Case Validation ──────────────────────────────────────────────

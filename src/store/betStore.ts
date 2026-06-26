@@ -72,6 +72,8 @@ interface BetActions {
   deleteBet: (betId: string) => void;
   editBet: (betId: string, updates: Partial<Omit<Bet, 'id'>>) => void;
   setEditBetId: (id: string | null) => void;
+  importBackup: (backup: any) => boolean;
+  resetAllData: () => void;
 }
 
 export type BetStore = BetState & BetActions;
@@ -557,6 +559,45 @@ export const useBetStore = create<BetStore>()(
             bankrollHistory: [...s.bankrollHistory, ...newHistory],
           };
         }),
+
+      // ── Data Backup / Restore ──────────────────────────────────────
+
+      importBackup: (backup) => {
+        try {
+          // If it's a string, try parsing it first
+          const parsed = typeof backup === 'string' ? JSON.parse(backup) : backup;
+          const sanitized = sanitizePersistedState(parsed);
+          set({
+            bets: sanitized.bets,
+            matches: sanitized.matches,
+            bankrolls: sanitized.bankrolls,
+            transactions: sanitized.transactions,
+            bankrollHistory: sanitized.bankrollHistory,
+          });
+          return true;
+        } catch (e) {
+          console.error('Failed to import backup:', e);
+          return false;
+        }
+      },
+
+      resetAllData: () =>
+        set(() => {
+          const fallback = {
+            bets: mockBets,
+            matches: mockMatches,
+            bankrolls: mockBankrolls,
+            transactions: mockTransactions,
+            bankrollHistory: mockBankrollHistory,
+          };
+          return {
+            bets: fallback.bets,
+            matches: fallback.matches,
+            bankrolls: fallback.bankrolls,
+            transactions: fallback.transactions,
+            bankrollHistory: fallback.bankrollHistory,
+          };
+        }),
     }),
     {
       name: 'betkhaata-store',
@@ -719,7 +760,12 @@ export const selectAnalytics = createMemoSelector((state: BetStore): AnalyticsSn
     .filter((b) => b && b.status === 'running')
     .reduce((sum, b) => sum + (Number(b?.stake) || 0), 0);
 
-  const { bestWin: bestWinStreak, worstLoss: worstLoseStreak } = computeStreaks(safeBets as any);
+  const {
+    bestWin: bestWinStreak,
+    worstLoss: worstLoseStreak,
+    currentStreakType,
+    currentStreakLength,
+  } = computeStreaks(safeBets as any);
 
   const averageOdds =
     totalBets > 0
@@ -737,6 +783,8 @@ export const selectAnalytics = createMemoSelector((state: BetStore): AnalyticsSn
     currentExposure,
     bestWinStreak,
     worstLoseStreak,
+    currentStreakType,
+    currentStreakLength,
     averageOdds,
     roiPercent,
     totalSettled,

@@ -178,6 +178,8 @@ export interface AnalyticsSnapshot {
   currentExposure: number;
   bestWinStreak: number;
   worstLoseStreak: number;
+  currentStreakType: 'win' | 'loss' | 'none';
+  currentStreakLength: number;
   averageOdds: number;
   roiPercent: number;
   totalSettled: number;
