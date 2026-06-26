@@ -26,8 +26,17 @@ export default function BetCard({ bet }: BetCardProps) {
     }
   };
 
+  // Highlight big wins/losses
+  const isBigWin = bet.status === 'won' && bet.profitLoss >= 5000;
+  const isBigLoss = bet.status === 'lost' && bet.profitLoss <= -5000;
+  const highlightStyle = isBigWin
+    ? 'ring-1 ring-profit/40 shadow-[0_0_16px_rgba(0,200,150,0.15)]'
+    : isBigLoss
+      ? 'ring-1 ring-loss/40 shadow-[0_0_16px_rgba(255,92,114,0.15)]'
+      : '';
+
   return (
-    <div className="bg-surface card-border rounded-xl overflow-hidden hover:bg-surface-light transition-all duration-200 card-border-hover">
+    <div className={`bg-surface card-border rounded-xl overflow-hidden hover:bg-surface-light transition-all duration-200 card-border-hover ${highlightStyle}`}>
       {/* Header */}
       <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04]">
         <div className="flex items-center gap-2">

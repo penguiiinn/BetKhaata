@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { ClipboardList, Search, Download, ArrowUpDown } from 'lucide-react';
 import { useBetStore, selectWinRate, selectFilteredBets } from '../../store/betStore';
 import { exportBetsCSV } from '../../utils/utils';
@@ -18,7 +17,7 @@ export default function BetsScreen() {
   const betFilters = useBetStore((s) => s.betFilters);
   const setBetFilters = useBetStore((s) => s.setBetFilters);
   const winRate = useBetStore(selectWinRate);
-  const filteredBets = useMemo(() => selectFilteredBets({ bets, betFilters } as any), [bets, betFilters]);
+  const filteredBets = useBetStore(selectFilteredBets);
 
   const handleExport = () => {
     exportBetsCSV(filteredBets);

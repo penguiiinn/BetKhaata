@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -12,8 +11,7 @@ import {
 import { useBetStore, selectDailyPnLFromBets } from '../../store/betStore';
 
 export default function DailyPnLChart() {
-  const bets = useBetStore((s) => s.bets);
-  const dailyPnLData = useMemo(() => selectDailyPnLFromBets({ bets } as any) || [], [bets]);
+  const dailyPnLData = useBetStore(selectDailyPnLFromBets) || [];
 
 
   if (dailyPnLData.length === 0) {

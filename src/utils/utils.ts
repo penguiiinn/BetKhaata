@@ -240,6 +240,11 @@ export function exportBetsCSV(
     profitLoss: number;
   }[] = [],
 ) {
+  if (!bets || bets.length === 0) {
+    alert('No bets to export.');
+    return;
+  }
+
   const headers = [
     'ID',
     'Match',
@@ -284,6 +289,11 @@ export function exportBankrollHistoryCSV(
     timestamp: string;
   }[] = [],
 ) {
+  if (!entries || entries.length === 0) {
+    alert('No bankroll history to export.');
+    return;
+  }
+
   const headers = ['ID', 'Bankroll', 'Balance', 'Change', 'Reason', 'Timestamp'];
 
   const rows = (entries || []).map((e) => [

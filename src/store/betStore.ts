@@ -582,6 +582,27 @@ export const useBetStore = create<BetStore>()(
   ),
 );
 
+// ── Selector Memoization Helper ───────────────────────────────────────
+// Prevents returning new array/object references when the derived data
+// hasn't actually changed. This is critical for Recharts which uses
+// reference equality to detect data changes — new refs on every render
+// cause infinite setState loops in ChartDataContextProvider.
+
+function createMemoSelector<T>(
+  selector: (state: BetStore) => T,
+  isEqual: (a: T, b: T) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b),
+): (state: BetStore) => T {
+  let lastResult: T | undefined;
+  return (state: BetStore) => {
+    const newResult = selector(state);
+    if (lastResult !== undefined && isEqual(lastResult, newResult)) {
+      return lastResult;
+    }
+    lastResult = newResult;
+    return newResult;
+  };
+}
+
 // ── Selectors ─────────────────────────────────────────────────────────
 
 export const selectTodayPnL = (state: BetStore) =>
@@ -612,7 +633,7 @@ export const selectWinRate = (state: BetStore) => {
   return Math.round((won / settled.length) * 100);
 };
 
-export const selectFilteredBets = (state: BetStore) => {
+export const selectFilteredBets = createMemoSelector((state: BetStore) => {
   const safeBets = Array.isArray(state.bets) ? state.bets : [];
   let filtered = [...safeBets];
 
@@ -662,7 +683,7 @@ export const selectFilteredBets = (state: BetStore) => {
   }
 
   return filtered;
-};
+});
 
 export const selectRunningBets = (state: BetStore) =>
   (Array.isArray(state.bets) ? state.bets : []).filter((b) => b && b.status === 'running');
@@ -675,9 +696,9 @@ export const selectTournaments = (state: BetStore) => {
   return Array.from(s);
 };
 
-// ── Analytics Selectors ───────────────────────────────────────────────
+// ── Analytics Selectors (Memoized) ────────────────────────────────────
 
-export const selectAnalytics = (state: BetStore): AnalyticsSnapshot => {
+export const selectAnalytics = createMemoSelector((state: BetStore): AnalyticsSnapshot => {
   const safeBets = Array.isArray(state.bets) ? state.bets : [];
 
   const settled = safeBets.filter((b) => b && (b.status === 'won' || b.status === 'lost'));
@@ -721,9 +742,9 @@ export const selectAnalytics = (state: BetStore): AnalyticsSnapshot => {
     totalSettled,
     activeBets,
   };
-};
+});
 
-export const selectDailyPnLFromBets = (state: BetStore): DailyPnL[] => {
+export const selectDailyPnLFromBets = createMemoSelector((state: BetStore): DailyPnL[] => {
   const safeBets = Array.isArray(state.bets) ? state.bets : [];
   const settled = safeBets.filter((b) => b && (b.status === 'won' || b.status === 'lost'));
 
@@ -749,9 +770,9 @@ export const selectDailyPnLFromBets = (state: BetStore): DailyPnL[] => {
       loss,
       net: profit + loss,
     }));
-};
+});
 
-export const selectBankrollGrowthData = (
+export const selectBankrollGrowthData = createMemoSelector((
   state: BetStore,
 ): { date: string; balance: number }[] => {
   const safeHistory = Array.isArray(state.bankrollHistory) ? state.bankrollHistory : [];
@@ -779,17 +800,17 @@ export const selectBankrollGrowthData = (
   return Object.entries(bankrollLatest)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, balances]) => ({
-      date: dayjs(date).format('DD MMM'),
+      date,
       balance: Object.values(balances).reduce((sum, b) => sum + (b || 0), 0),
     }));
-};
+});
 
-export const selectWinLossPieData = (state: BetStore): { name: string; value: number }[] => {
+export const selectWinLossPieData = createMemoSelector((state: BetStore): { name: string; value: number }[] => {
   const won = (state.bets || []).filter((b) => b && b.status === 'won').length;
   const lost = (state.bets || []).filter((b) => b && b.status === 'lost').length;
   return [
     { name: 'Won', value: won },
     { name: 'Lost', value: lost },
   ];
-};
+});
 

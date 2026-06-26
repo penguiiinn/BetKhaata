@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertTriangle, TrendingUp, TrendingDown, Target, Eye, Flame, BarChart3, Download, Activity, Percent, CheckCircle2, Zap } from 'lucide-react';
 import {
   BarChart,
@@ -17,10 +17,10 @@ import PerformanceBreakdown from './PerformanceBreakdown';
 import { hourlyBettingData, lossChaseWarning, dailyPnLData } from '../../data/mockData';
 import { useBetStore, selectAnalytics, selectBankrollGrowthData, selectDailyPnLFromBets } from '../../store/betStore';
 import { formatCurrency, formatCurrencyWithSign, exportBankrollHistoryCSV } from '../../utils/utils';
+import dayjs from 'dayjs';
 
 export default function InsightsScreen() {
-  const bets = useBetStore((s) => s.bets);
-  const analytics = useMemo(() => selectAnalytics({ bets } as any), [bets]);
+  const analytics = useBetStore(selectAnalytics);
 
   return (
     <div className="px-4 py-4 w-full max-w-[430px] md:max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
@@ -224,11 +224,34 @@ function AnalyticsDashboard({ analytics }: { analytics: ReturnType<typeof select
 
 // ── Bankroll Growth Chart ─────────────────────────────────────────────
 
-function BankrollGrowthChart() {
-  const bankrollHistory = useBetStore((s) => s.bankrollHistory);
-  const growthData = useMemo(() => selectBankrollGrowthData({ bankrollHistory } as any) || [], [bankrollHistory]);
+type GrowthRange = '7d' | '30d' | '90d' | 'all';
 
-  if (growthData.length === 0) {
+function BankrollGrowthChart() {
+  const allGrowthData = useBetStore(selectBankrollGrowthData);
+  const [range, setRange] = useState<GrowthRange>('all');
+
+  const growthData = useMemo(() => {
+    const data = allGrowthData || [];
+    if (range === 'all' || data.length === 0) return data;
+
+    const now = dayjs();
+    const daysMap: Record<GrowthRange, number> = { '7d': 7, '30d': 30, '90d': 90, all: 999999 };
+    const cutoff = now.subtract(daysMap[range], 'day');
+
+    return data.filter((d) => {
+      const parsed = dayjs(d.date);
+      return parsed.isAfter(cutoff);
+    });
+  }, [allGrowthData, range]);
+
+  const rangeOptions: { label: string; value: GrowthRange }[] = [
+    { label: '7D', value: '7d' },
+    { label: '30D', value: '30d' },
+    { label: '90D', value: '90d' },
+    { label: 'All', value: 'all' },
+  ];
+
+  if ((allGrowthData || []).length === 0) {
     return (
       <div className="bg-surface card-border rounded-xl p-4">
         <h3 className="text-sm font-semibold mb-1">Bankroll Growth</h3>
@@ -242,14 +265,31 @@ function BankrollGrowthChart() {
 
   return (
     <div className="bg-surface card-border rounded-xl p-4">
-      <h3 className="text-sm font-semibold mb-1">Bankroll Growth</h3>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-sm font-semibold">Bankroll Growth</h3>
+        <div className="flex gap-1">
+          {rangeOptions.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setRange(opt.value)}
+              className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all duration-200 ${
+                range === opt.value
+                  ? 'bg-profit/[0.15] text-profit border border-profit/30'
+                  : 'bg-white/[0.04] text-dim hover:text-muted'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <p className="text-[10px] text-dim mb-4">Total balance over time</p>
 
       <div className="h-44">
         <ResponsiveContainer width="100%" height={176}>
           <AreaChart
-            data={growthData}
-            margin={{ top: 5, right: 0, left: -20, bottom: 0 }}
+              data={growthData}
+              margin={{ top: 5, right: 0, left: -20, bottom: 0 }}
           >
             <defs>
               <linearGradient id="bankrollGradient" x1="0" y1="0" x2="0" y2="1">
@@ -262,6 +302,7 @@ function BankrollGrowthChart() {
               axisLine={false}
               tickLine={false}
               tick={{ fill: '#4A4E5A', fontSize: 9 }}
+              tickFormatter={(v) => dayjs(v).format('DD MMM')}
               interval={Math.max(0, Math.floor(growthData.length / 6))}
             />
             <YAxis
@@ -289,6 +330,7 @@ function BankrollGrowthChart() {
                 `₹${(typeof value === 'number' ? value : Number(value) || 0).toLocaleString('en-IN')}`,
                 'Balance',
               ]}
+              labelFormatter={(label) => dayjs(label).format('DD MMM YYYY')}
               labelStyle={{ color: '#8B8FA3', fontSize: '11px' }}
             />
             <Area
@@ -308,9 +350,8 @@ function BankrollGrowthChart() {
 // ── Daily Heatmap ─────────────────────────────────────────────────────
 
 function DailyHeatmap() {
-  const bets = useBetStore((s) => s.bets);
-  const computedDailyPnL = useMemo(() => selectDailyPnLFromBets({ bets } as any) || [], [bets]);
-  const heatmapData = computedDailyPnL.length > 0 ? computedDailyPnL : dailyPnLData;
+  const computedDailyPnL = useBetStore(selectDailyPnLFromBets);
+  const heatmapData = (computedDailyPnL || []).length > 0 ? computedDailyPnL : dailyPnLData;
 
   const getIntensity = (net: number) => {
     const abs = Math.abs(net);
