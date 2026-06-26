@@ -20,6 +20,10 @@ function MainApp() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    if (!useBetStore.persist) {
+      setHydrated(true);
+      return;
+    }
     // Listen for hydration status changes
     const unsubHydrate = useBetStore.persist.onHydrate(() => setHydrated(false));
     const unsubFinishHydrate = useBetStore.persist.onFinishHydration(() => setHydrated(true));
