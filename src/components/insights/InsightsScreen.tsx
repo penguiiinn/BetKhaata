@@ -14,12 +14,14 @@ import {
 import WinRateChart from './WinRateChart';
 import DailyPnLChart from './DailyPnLChart';
 import PerformanceBreakdown from './PerformanceBreakdown';
+import RiskInsightsDashboard from './RiskInsightsDashboard';
 import { hourlyBettingData, lossChaseWarning, dailyPnLData } from '../../data/mockData';
 import { useBetStore, selectAnalytics, selectBankrollGrowthData, selectDailyPnLFromBets, selectMarketPerformance } from '../../store/betStore';
 import { formatCurrency, formatCurrencyWithSign, exportBankrollHistoryCSV } from '../../utils/utils';
 import dayjs from 'dayjs';
 
 export default function InsightsScreen() {
+  const [activeView, setActiveView] = useState<'analytics' | 'risk'>('analytics');
   const analytics = useBetStore(selectAnalytics);
 
   return (
@@ -33,79 +35,111 @@ export default function InsightsScreen() {
         <p className="text-xs text-muted mt-0.5">Your betting analytics & patterns</p>
       </div>
 
-      {/* Analytics Dashboard */}
-      <div
-        className="col-span-full animate-slide-up stagger-1"
-        style={{ opacity: 0 }}
-      >
-        <AnalyticsDashboard analytics={analytics} />
-      </div>
-
-      {/* Win Rate */}
-      <div
-        className="min-w-0 animate-slide-up stagger-2"
-        style={{ opacity: 0 }}
-      >
-        <WinRateChart />
-      </div>
-
-      {/* Daily P&L */}
-      <div
-        className="min-w-0 animate-slide-up stagger-3"
-        style={{ opacity: 0 }}
-      >
-        <DailyPnLChart />
-      </div>
-
-      {/* Bankroll Growth Chart */}
-      <div
-        className="min-w-0 animate-slide-up stagger-4 md:col-span-2 lg:col-span-1"
-        style={{ opacity: 0 }}
-      >
-        <BankrollGrowthChart />
-      </div>
-
-      {/* Daily Heatmap */}
-      <div
-        className="animate-slide-up stagger-5"
-        style={{ opacity: 0 }}
-      >
-        <DailyHeatmap />
-      </div>
-
-      {/* Hourly Activity */}
-      <div
-        className="min-w-0 animate-slide-up stagger-6"
-        style={{ opacity: 0 }}
-      >
-        <HourlyChart />
-      </div>
-
-      {/* Market Performance Card */}
-      <div
-        className="min-w-0 animate-slide-up stagger-6"
-        style={{ opacity: 0 }}
-      >
-        <MarketPerformanceCard />
-      </div>
-
-      {/* Loss Chasing Warning */}
-      {lossChaseWarning.detected && (
-        <div
-          className="animate-slide-up stagger-7 md:col-span-2 lg:col-span-1"
-          style={{ opacity: 0 }}
+      {/* Top View Toggle */}
+      <div className="col-span-full flex border-b border-white/[0.04] pb-1.5 mb-2">
+        <button
+          onClick={() => setActiveView('analytics')}
+          className={`pb-2 px-4 text-xs font-bold transition-all relative ${
+            activeView === 'analytics'
+              ? 'text-white border-b-2 border-gold font-extrabold'
+              : 'text-dim hover:text-white'
+          }`}
         >
-          <LossChasingAlert />
+          Performance Analytics
+        </button>
+        <button
+          onClick={() => setActiveView('risk')}
+          className={`pb-2 px-4 text-xs font-bold transition-all relative ${
+            activeView === 'risk'
+              ? 'text-white border-b-2 border-gold font-extrabold'
+              : 'text-dim hover:text-white'
+          }`}
+        >
+          Risk & Discipline
+        </button>
+      </div>
+
+      {activeView === 'analytics' ? (
+        <>
+          {/* Analytics Dashboard */}
+          <div
+            className="col-span-full animate-slide-up stagger-1"
+            style={{ opacity: 0 }}
+          >
+            <AnalyticsDashboard analytics={analytics} />
+          </div>
+
+          {/* Win Rate */}
+          <div
+            className="min-w-0 animate-slide-up stagger-2"
+            style={{ opacity: 0 }}
+          >
+            <WinRateChart />
+          </div>
+
+          {/* Daily P&L */}
+          <div
+            className="min-w-0 animate-slide-up stagger-3"
+            style={{ opacity: 0 }}
+          >
+            <DailyPnLChart />
+          </div>
+
+          {/* Bankroll Growth Chart */}
+          <div
+            className="min-w-0 animate-slide-up stagger-4 md:col-span-2 lg:col-span-1"
+            style={{ opacity: 0 }}
+          >
+            <BankrollGrowthChart />
+          </div>
+
+          {/* Daily Heatmap */}
+          <div
+            className="animate-slide-up stagger-5"
+            style={{ opacity: 0 }}
+          >
+            <DailyHeatmap />
+          </div>
+
+          {/* Hourly Activity */}
+          <div
+            className="min-w-0 animate-slide-up stagger-6"
+            style={{ opacity: 0 }}
+          >
+            <HourlyChart />
+          </div>
+
+          {/* Market Performance Card */}
+          <div
+            className="min-w-0 animate-slide-up stagger-6"
+            style={{ opacity: 0 }}
+          >
+            <MarketPerformanceCard />
+          </div>
+
+          {/* Loss Chasing Warning */}
+          {lossChaseWarning.detected && (
+            <div
+              className="animate-slide-up stagger-7 md:col-span-2 lg:col-span-1"
+              style={{ opacity: 0 }}
+            >
+              <LossChasingAlert />
+            </div>
+          )}
+
+          {/* Performance Breakdown */}
+          <div
+            className="animate-slide-up stagger-8 md:col-span-2 lg:col-span-3"
+            style={{ opacity: 0 }}
+          >
+            <PerformanceBreakdown />
+          </div>
+        </>
+      ) : (
+        <div className="col-span-full">
+          <RiskInsightsDashboard />
         </div>
       )}
-
-      {/* Performance Breakdown */}
-      <div
-        className="animate-slide-up stagger-8 md:col-span-2 lg:col-span-3"
-        style={{ opacity: 0 }}
-      >
-        <PerformanceBreakdown />
-      </div>
     </div>
   );
 }

@@ -28,6 +28,11 @@ import {
   mockMatches,
   mockTransactions,
 } from '../data/mockData';
+import {
+  analyzeLossChasing,
+  calculateHeatmap,
+  compileWeeklyReport,
+} from '../utils/riskDetector';
 import { computeStreaks, isThisWeek, isToday } from '../utils/utils';
 
 // ── Filter & Modal Types ──────────────────────────────────────────────
@@ -2207,5 +2212,25 @@ export const selectMarketPerformance = createDependencySelector(
   },
   (state) => state.bets,
   (a, b) => a === b,
+);
+
+// ── Loss Chasing Analytics Selectors ──────────────────────────────────
+
+export const selectRiskAnalysis = createDependencySelector(
+  (state: BetStore) => analyzeLossChasing(state.bets || [], state.bankrolls || []),
+  (state) => [state.bets, state.bankrolls] as const,
+  (a, b) => a[0] === b[0] && a[1] === b[1],
+);
+
+export const selectHeatmapData = createDependencySelector(
+  (state: BetStore) => calculateHeatmap(state.bets || []),
+  (state) => state.bets,
+  (a, b) => a === b,
+);
+
+export const selectWeeklyRiskReport = createDependencySelector(
+  (state: BetStore) => compileWeeklyReport(state.bets || [], state.bankrolls || []),
+  (state) => [state.bets, state.bankrolls] as const,
+  (a, b) => a[0] === b[0] && a[1] === b[1],
 );
 
