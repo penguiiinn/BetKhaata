@@ -151,12 +151,48 @@ function MainApp() {
     }
   };
 
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen bg-dark text-white font-sans flex flex-col items-center justify-center animate-fade-in">
+        <div className="flex flex-col items-center space-y-4">
+          {/* Premium Cricket Rupee Logo Badge */}
+          <div className="w-20 h-20 rounded-2xl bg-surface card-border flex items-center justify-center shadow-2xl relative overflow-hidden animate-pulse">
+            <svg viewBox="0 0 100 100" className="w-14 h-14">
+              <circle cx="50" cy="50" r="45" fill="url(#splashBallGrad)" />
+              {/* Gold Seams */}
+              <path d="M 25 25 C 40 40, 40 60, 25 75" fill="none" stroke="#FFE17D" strokeWidth="2.5" strokeDasharray="3 2" opacity="0.7" />
+              <path d="M 75 25 C 60 40, 60 60, 75 75" fill="none" stroke="#FFE17D" strokeWidth="2.5" strokeDasharray="3 2" opacity="0.7" />
+              {/* Rupee symbol */}
+              <text x="50" y="58" textAnchor="middle" fill="#FFE17D" fontSize="28" fontWeight="900" fontFamily="sans-serif">₹</text>
+              <defs>
+                <radialGradient id="splashBallGrad" cx="30%" cy="30%" r="70%">
+                  <stop offset="0%" stopColor="#FF4B62"/>
+                  <stop offset="100%" stopColor="#8A0B1A"/>
+                </radialGradient>
+              </defs>
+            </svg>
+          </div>
+          <div className="text-center">
+            <h1 className="text-xl font-black tracking-tight text-white/95">
+              Bet<span className="text-gold">Khaata</span>
+            </h1>
+            <p className="text-[10px] text-dim font-bold tracking-widest uppercase mt-1">
+              Betting Intelligence
+            </p>
+          </div>
+          {/* Elegant Gold Spinner */}
+          <div className="w-5 h-5 border-2 border-gold/20 border-t-gold rounded-full animate-spin mt-4" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-dark text-white font-sans">
       <Header />
 
       <main className="pt-14 pb-20">
-        {hydrated ? renderScreen() : renderSkeletonScreen()}
+        {renderScreen()}
       </main>
 
       <BottomNav />

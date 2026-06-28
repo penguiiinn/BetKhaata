@@ -126,18 +126,20 @@ export default function BetsScreen() {
             </div>
           ))
         ) : (
-          <div className="text-center py-16 col-span-full">
-            <ClipboardList className="w-12 h-12 text-dim mx-auto mb-3" />
+          <div className="text-center py-12 col-span-full bg-surface card-border rounded-2xl p-6 border-white/[0.04] max-w-sm mx-auto space-y-2.5 shadow-lg animate-scale-in">
+            <div className="w-12 h-12 rounded-full bg-white/[0.04] flex items-center justify-center mx-auto mb-1 border border-white/[0.06]">
+              <ClipboardList className="w-5.5 h-5.5 text-muted" />
+            </div>
             {!bets || bets.length === 0 ? (
-              <>
-                <p className="text-muted text-sm">You haven't placed any bets yet</p>
-                <p className="text-dim text-xs mt-1">Go to the Matches screen to place your first bet!</p>
-              </>
+              <div>
+                <p className="text-white/90 text-sm font-bold">No Bets Recorded Yet</p>
+                <p className="text-dim text-xs mt-1.5 leading-relaxed">Go to the Live Cricket page or Matches tab to pick your first match and log a bet!</p>
+              </div>
             ) : (
-              <>
-                <p className="text-muted text-sm">No bets match your filters</p>
-                <p className="text-dim text-xs mt-1">Try adjusting the filters above</p>
-              </>
+              <div>
+                <p className="text-white/90 text-sm font-bold">No Matching Bets</p>
+                <p className="text-dim text-xs mt-1.5 leading-relaxed">No bets match your current search terms, status, or format filters. Adjust filters to broaden your search.</p>
+              </div>
             )}
           </div>
         )}
