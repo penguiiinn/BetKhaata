@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useBetStore } from '../../store/betStore';
 import { MARKET_TYPES } from '../../types/types';
 import type { MarketType, MatchFormat } from '../../types/types';
@@ -28,11 +28,34 @@ export default function AddBetModal() {
     bankrollId: '',
   });
   const [error, setError] = useState('');
+  
+  const prefilledBet = useBetStore((s) => s.prefilledBet);
+  const setPrefilledBet = useBetStore((s) => s.setPrefilledBet);
 
-  // Pre-fill match if selected from match card
+  // Pre-fill fields when prefilledBet context or match changes
   const effectiveMatchId = formData.matchId || selectedMatchId || '';
 
   const selectedMatch = matches.find((m) => m.id === effectiveMatchId);
+
+  // Sync effect when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (prefilledBet) {
+        setFormData((f) => ({
+          ...f,
+          marketType: prefilledBet.marketType as MarketType,
+          selection: prefilledBet.selection,
+          odds: prefilledBet.odds.toString(),
+        }));
+      }
+      if (selectedMatchId) {
+        setFormData((f) => ({
+          ...f,
+          matchId: selectedMatchId,
+        }));
+      }
+    }
+  }, [isOpen, prefilledBet, selectedMatchId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,12 +109,14 @@ export default function AddBetModal() {
     });
     setError('');
     setSelectedMatchId(null);
+    setPrefilledBet(undefined);
     closeModal('addBet');
   };
 
   const handleClose = () => {
     setError('');
     setSelectedMatchId(null);
+    setPrefilledBet(undefined);
     closeModal('addBet');
   };
 

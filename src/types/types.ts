@@ -63,6 +63,7 @@ export interface Match {
   startTime: string;
   venue: string;
   score?: MatchScore;
+  liveData?: MatchLiveData;
 }
 
 export interface Bet {
@@ -189,4 +190,56 @@ export interface AnalyticsSnapshot {
 // ── Sorting ───────────────────────────────────────────────────────────
 
 export type BetSortKey = 'newest' | 'oldest' | 'highest_stake' | 'highest_profit';
+
+// ── Live Cricket Engine Types ─────────────────────────────────────────
+
+export interface LivePlayer {
+  name: string;
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+  isOut: boolean;
+  howOut?: string;
+  overs?: number;
+  runsConceded?: number;
+  wickets?: number;
+  maidens?: number;
+}
+
+export interface LiveMarket {
+  id: string;
+  type: 'over_runs' | 'wickets' | 'partnership';
+  title: string;
+  question: string;
+  target: number;
+  oddsOver: number;
+  oddsUnder: number;
+  status: 'open' | 'settled';
+  result?: 'over' | 'under';
+}
+
+export interface MatchLiveData {
+  innings: 1 | 2;
+  battingTeam: string; // shortName
+  bowlingTeam: string; // shortName
+  oversBowled: number; // e.g. 14.3
+  ballsInOver: number; // 0 to 5
+  runsInCurrentOver: number; // to track current over runs
+  runsCurrentOverList: number[]; // e.g. [1, 4, 0, 1, 6, 0]
+  target?: number;
+  wickets: number;
+  runs: number;
+  crr: number;
+  rrr?: number;
+  liveStatus: string;
+  batsmen: LivePlayer[];
+  bowlers: LivePlayer[];
+  currentBatsmenIds: number[]; // indices of the 2 active batsmen
+  currentBowlerId: number;     // index of the current bowler
+  partnershipRuns: number;
+  partnershipBalls: number;
+  sessionMarkets: LiveMarket[];
+}
+
 

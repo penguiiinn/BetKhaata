@@ -47,6 +47,7 @@ interface Modals {
   deposit: boolean;
   withdraw: boolean;
   setLimit: boolean;
+  matchCenter: boolean;
 }
 
 // ── Store Interface ───────────────────────────────────────────────────
@@ -63,6 +64,11 @@ interface BetState {
   modals: Modals;
   selectedMatchId: string | null;
   editBetId: string | null;
+  prefilledBet?: {
+    marketType: string;
+    selection: string;
+    odds: number;
+  };
 }
 
 interface BetActions {
@@ -81,8 +87,10 @@ interface BetActions {
   deleteBet: (betId: string) => void;
   editBet: (betId: string, updates: Partial<Omit<Bet, 'id'>>) => void;
   setEditBetId: (id: string | null) => void;
+  setPrefilledBet: (bet: { marketType: string; selection: string; odds: number } | undefined) => void;
   importBackup: (backup: any) => boolean;
   resetAllData: () => void;
+  tickCricketEngine: () => void;
 }
 
 export type BetStore = BetState & BetActions;
@@ -272,9 +280,10 @@ export const useBetStore = create<BetStore>()(
         marketType: 'all',
         dateRange: { start: '', end: '' },
       },
-      modals: { addBet: false, deposit: false, withdraw: false, setLimit: false },
+      modals: { addBet: false, deposit: false, withdraw: false, setLimit: false, matchCenter: false },
       selectedMatchId: null,
       editBetId: null,
+      prefilledBet: undefined,
 
       // ── UI Actions ────────────────────────────────────────────────
 
@@ -287,11 +296,12 @@ export const useBetStore = create<BetStore>()(
       closeModal: (modal) => set((s) => ({ modals: { ...s.modals, [modal]: false } })),
       closeAllModals: () =>
         set({
-          modals: { addBet: false, deposit: false, withdraw: false, setLimit: false },
+          modals: { addBet: false, deposit: false, withdraw: false, setLimit: false, matchCenter: false },
         }),
 
       setSelectedMatchId: (id) => set({ selectedMatchId: id }),
       setEditBetId: (id) => set({ editBetId: id }),
+      setPrefilledBet: (bet) => set({ prefilledBet: bet }),
 
       // ── Add Bet ───────────────────────────────────────────────────
 
@@ -614,6 +624,626 @@ export const useBetStore = create<BetStore>()(
             bankrolls: fallback.bankrolls,
             transactions: fallback.transactions,
             bankrollHistory: fallback.bankrollHistory,
+          };
+        }),
+
+      // ── Cricket Engine Simulation Tick ─────────────────────────────
+
+      tickCricketEngine: () =>
+        set((s) => {
+          let matchesChanged = false;
+          let betsChanged = false;
+          let bankrollsChanged = false;
+          let historyChanged = false;
+
+          let updatedBets = [...s.bets];
+          let updatedBankrolls = [...s.bankrolls];
+          let updatedHistory = [...s.bankrollHistory];
+
+          // Helper to settle a bet dynamically in simulation
+          const autoSettle = (
+            betId: string,
+            status: 'won' | 'lost' | 'void',
+            profitLoss: number,
+            returnAmt: number,
+            reason: string,
+          ) => {
+            const betIdx = updatedBets.findIndex((b) => b.id === betId);
+            if (betIdx === -1) return;
+            const bet = updatedBets[betIdx];
+            if (bet.status !== 'running') return;
+
+            // Settle bet
+            updatedBets[betIdx] = { ...bet, status, profitLoss };
+            betsChanged = true;
+
+            // Update bankroll balance
+            updatedBankrolls = updatedBankrolls.map((b) => {
+              if (b.id === bet.bankrollId) {
+                bankrollsChanged = true;
+                return {
+                  ...b,
+                  balance: b.balance + returnAmt,
+                  activeExposure: Math.max(0, b.activeExposure - bet.stake),
+                };
+              }
+              return b;
+            });
+
+            // Add history entry
+            const bankroll = updatedBankrolls.find((b) => b.id === bet.bankrollId);
+            const entry = createHistoryEntry(
+              bet.bankrollId,
+              bankroll?.balance ?? 0,
+              returnAmt,
+              reason,
+            );
+            updatedHistory = [...updatedHistory, entry];
+            historyChanged = true;
+          };
+
+          const updatedMatches = s.matches.map((m) => {
+            if (m.status !== 'live') return m;
+            matchesChanged = true;
+
+            // 1. Initialize live data if not present
+            if (!m.liveData) {
+              const team1Players = [
+                'Ruturaj Gaikwad',
+                'Rachin Ravindra',
+                'Ajinkya Rahane',
+                'Shivam Dube',
+                'Daryl Mitchell',
+                'Ravindra Jadeja',
+                'MS Dhoni',
+                'Mitchell Santner',
+                'Shardul Thakur',
+                'Tushar Deshpande',
+                'Matheesha Pathirana',
+              ];
+              const team2Players = [
+                'Rohit Sharma',
+                'Ishan Kishan',
+                'Suryakumar Yadav',
+                'Tilak Varma',
+                'Hardik Pandya',
+                'Tim David',
+                'Romario Shepherd',
+                'Gerald Coetzee',
+                'Jasprit Bumrah',
+                'Piyush Chawla',
+                'Akash Madhwal',
+              ];
+
+              const team1Bowlers = ['Jasprit Bumrah', 'Gerald Coetzee', 'Piyush Chawla', 'Hardik Pandya', 'Akash Madhwal'];
+              const team2Bowlers = ['Matheesha Pathirana', 'Ravindra Jadeja', 'Shardul Thakur', 'Tushar Deshpande', 'Mitchell Santner'];
+
+              const formatTeams = m.team1.shortName === 'CSK' ? { bat: team1Players, bowl: team1Bowlers } : { bat: team2Players, bowl: team2Bowlers };
+              const oppTeams = m.team1.shortName === 'CSK' ? { bat: team2Players, bowl: team2Bowlers } : { bat: team1Players, bowl: team1Bowlers };
+
+              const batsmen = formatTeams.bat.map((name) => ({
+                name,
+                runs: 0,
+                balls: 0,
+                fours: 0,
+                sixes: 0,
+                isOut: false,
+              }));
+              const bowlers = oppTeams.bowl.map((name) => ({
+                name,
+                runs: 0,
+                balls: 0,
+                fours: 0,
+                sixes: 0,
+                isOut: false,
+                overs: 0,
+                runsConceded: 0,
+                wickets: 0,
+                maidens: 0,
+              }));
+
+              const sessionMarkets = [
+                {
+                  id: `${m.id}-sm-over`,
+                  type: 'over_runs' as const,
+                  title: 'Next Over Runs',
+                  question: 'Runs scored in Over 1',
+                  target: 7.5,
+                  oddsOver: 1.9,
+                  oddsUnder: 1.9,
+                  status: 'open' as const,
+                },
+                {
+                  id: `${m.id}-sm-wicket`,
+                  type: 'wickets' as const,
+                  title: 'Wickets in Session',
+                  question: 'Will a wicket fall in next 3 overs?',
+                  target: 0.5,
+                  oddsOver: 2.1,
+                  oddsUnder: 1.65,
+                  status: 'open' as const,
+                },
+                {
+                  id: `${m.id}-sm-partnership`,
+                  type: 'partnership' as const,
+                  title: 'Partnership Runs',
+                  question: 'Will current partnership cross 35.5 runs?',
+                  target: 35.5,
+                  oddsOver: 1.85,
+                  oddsUnder: 1.85,
+                  status: 'open' as const,
+                },
+              ];
+
+              return {
+                ...m,
+                score: {
+                  team1Score: '0/0',
+                  team2Score: '',
+                  overs: '0.0',
+                },
+                liveData: {
+                  innings: 1,
+                  battingTeam: m.team1.shortName,
+                  bowlingTeam: m.team2.shortName,
+                  oversBowled: 0.0,
+                  ballsInOver: 0,
+                  runsInCurrentOver: 0,
+                  runsCurrentOverList: [],
+                  wickets: 0,
+                  runs: 0,
+                  crr: 0,
+                  liveStatus: `${m.team1.shortName} elected to bat first.`,
+                  batsmen,
+                  bowlers,
+                  currentBatsmenIds: [0, 1],
+                  currentBowlerId: 0,
+                  partnershipRuns: 0,
+                  partnershipBalls: 0,
+                  sessionMarkets,
+                },
+              };
+            }
+
+            // 2. Simulate ball update
+            const ld = { ...m.liveData };
+            const batsmen = ld.batsmen.map((b) => ({ ...b }));
+            const bowlers = ld.bowlers.map((b) => ({ ...b }));
+
+            const strikeIdx = ld.currentBatsmenIds[0];
+            const nonStrikeIdx = ld.currentBatsmenIds[1];
+            const bowlerIdx = ld.currentBowlerId;
+
+            const outcomeRand = Math.random();
+            let runs = 0;
+            let isWicket = false;
+
+            if (outcomeRand < 0.35) {
+              runs = 0;
+            } else if (outcomeRand < 0.75) {
+              runs = 1;
+            } else if (outcomeRand < 0.85) {
+              runs = 2;
+            } else if (outcomeRand < 0.91) {
+              runs = 4;
+            } else if (outcomeRand < 0.95) {
+              runs = 6;
+            } else {
+              isWicket = true;
+            }
+
+            // Update stats
+            ld.ballsInOver++;
+            ld.partnershipBalls++;
+
+            if (isWicket) {
+              ld.wickets++;
+              batsmen[strikeIdx] = {
+                ...batsmen[strikeIdx],
+                balls: batsmen[strikeIdx].balls + 1,
+                isOut: true,
+                howOut: `c fielder b ${bowlers[bowlerIdx].name}`,
+              };
+              bowlers[bowlerIdx] = {
+                ...bowlers[bowlerIdx],
+                wickets: bowlers[bowlerIdx].wickets + 1,
+              };
+
+              // Wickets in session check
+              const wicketMarket = ld.sessionMarkets.find(
+                (x) => x.type === 'wickets' && x.status === 'open',
+              );
+              if (wicketMarket) {
+                // Wicket fell, Over wins
+                wicketMarket.status = 'settled';
+                wicketMarket.result = 'over';
+
+                // settle bets
+                const matchBets = updatedBets.filter(
+                  (b) =>
+                    b.matchId === m.id &&
+                    b.status === 'running' &&
+                    b.marketType === 'Wickets',
+                );
+                for (const b of matchBets) {
+                  const sel = b.selection.toLowerCase();
+                  if (sel.includes('over')) {
+                    autoSettle(
+                      b.id,
+                      'won',
+                      b.stake * (b.odds - 1),
+                      b.stake * b.odds,
+                      'Won: Wicket fell in session',
+                    );
+                  } else {
+                    autoSettle(b.id, 'lost', -b.stake, 0, 'Lost: Wicket fell in session');
+                  }
+                }
+              }
+
+              // Partnership check
+              const partMarket = ld.sessionMarkets.find(
+                (x) => x.type === 'partnership' && x.status === 'open',
+              );
+              if (partMarket) {
+                const crossed = ld.partnershipRuns >= partMarket.target;
+                partMarket.status = 'settled';
+                partMarket.result = crossed ? 'over' : 'under';
+
+                const matchBets = updatedBets.filter(
+                  (b) =>
+                    b.matchId === m.id &&
+                    b.status === 'running' &&
+                    b.marketType === 'Boundary Count',
+                );
+                for (const b of matchBets) {
+                  if (b.selection.toLowerCase().includes('over')) {
+                    if (crossed) {
+                      autoSettle(
+                        b.id,
+                        'won',
+                        b.stake * (b.odds - 1),
+                        b.stake * b.odds,
+                        `Won: Partnership crossed ${partMarket.target}`,
+                      );
+                    } else {
+                      autoSettle(
+                        b.id,
+                        'lost',
+                        -b.stake,
+                        0,
+                        `Lost: Partnership failed to cross ${partMarket.target}`,
+                      );
+                    }
+                  } else {
+                    if (crossed) {
+                      autoSettle(
+                        b.id,
+                        'lost',
+                        -b.stake,
+                        0,
+                        `Lost: Partnership crossed ${partMarket.target}`,
+                      );
+                    } else {
+                      autoSettle(
+                        b.id,
+                        'won',
+                        b.stake * (b.odds - 1),
+                        b.stake * b.odds,
+                        `Won: Partnership stayed under ${partMarket.target}`,
+                      );
+                    }
+                  }
+                }
+              }
+
+              // Reset partnership
+              ld.partnershipRuns = 0;
+              ld.partnershipBalls = 0;
+
+              // Bring next batsman in
+              const nextBatsmanIdx = batsmen.findIndex(
+                (bt) => !bt.isOut && !ld.currentBatsmenIds.includes(batsmen.indexOf(bt)),
+              );
+              if (nextBatsmanIdx !== -1 && ld.wickets < 10) {
+                ld.currentBatsmenIds = [nextBatsmanIdx, nonStrikeIdx];
+                ld.liveStatus = `${batsmen[strikeIdx].name} falls. ${batsmen[nextBatsmanIdx].name} comes to the crease.`;
+              } else {
+                ld.liveStatus = 'All out! Innings complete.';
+              }
+            } else {
+              ld.runs += runs;
+              ld.runsInCurrentOver += runs;
+              ld.runsCurrentOverList = [...ld.runsCurrentOverList, runs];
+              ld.partnershipRuns += runs;
+
+              batsmen[strikeIdx] = {
+                ...batsmen[strikeIdx],
+                runs: batsmen[strikeIdx].runs + runs,
+                balls: batsmen[strikeIdx].runs === 0 && runs === 0 && batsmen[strikeIdx].balls === 0 ? 1 : batsmen[strikeIdx].balls + 1,
+                fours: batsmen[strikeIdx].fours + (runs === 4 ? 1 : 0),
+                sixes: batsmen[strikeIdx].sixes + (runs === 6 ? 1 : 0),
+              };
+
+              // Correct balls count
+              if (runs > 0 && batsmen[strikeIdx].balls === 0) {
+                batsmen[strikeIdx].balls = 1;
+              }
+
+              bowlers[bowlerIdx] = {
+                ...bowlers[bowlerIdx],
+                runsConceded: bowlers[bowlerIdx].runsConceded + runs,
+              };
+
+              // Rotate strike on odd runs
+              if (runs === 1 || runs === 3) {
+                ld.currentBatsmenIds = [nonStrikeIdx, strikeIdx];
+              }
+
+              ld.liveStatus = `${batsmen[strikeIdx].name} hits ${
+                runs === 0 ? 'no run' : runs === 4 ? 'a BOUNDARY 4!' : runs === 6 ? 'a HUGE 6!' : `${runs} run`
+              }.`;
+            }
+
+            // Calculate oversBowled
+            const totalBalls = Math.floor(ld.oversBowled) * 6 + ld.ballsInOver;
+            ld.oversBowled = Math.floor(totalBalls / 6) + (totalBalls % 6) / 10;
+            ld.crr = ld.oversBowled > 0 ? ld.runs / (totalBalls / 6) : 0;
+
+            // Check if over completed
+            if (ld.ballsInOver === 6) {
+              const completedOverNum = Math.floor(ld.oversBowled);
+
+              // Settle "Next Over Runs" market
+              const overMarket = ld.sessionMarkets.find(
+                (x) => x.type === 'over_runs' && x.status === 'open',
+              );
+              if (overMarket) {
+                const actualRuns = ld.runsInCurrentOver;
+                const wonOver = actualRuns > overMarket.target;
+                overMarket.status = 'settled';
+                overMarket.result = wonOver ? 'over' : 'under';
+
+                // Auto-settle bets placed on this session
+                const matchBets = updatedBets.filter(
+                  (b) =>
+                    b.matchId === m.id &&
+                    b.status === 'running' &&
+                    b.marketType === 'Session Betting',
+                );
+                for (const b of matchBets) {
+                  const selectionVal = b.selection.toLowerCase();
+                  if (selectionVal.includes('over')) {
+                    if (wonOver) {
+                      autoSettle(
+                        b.id,
+                        'won',
+                        b.stake * (b.odds - 1),
+                        b.stake * b.odds,
+                        `Won: Over runs ${actualRuns} > ${overMarket.target}`,
+                      );
+                    } else {
+                      autoSettle(
+                        b.id,
+                        'lost',
+                        -b.stake,
+                        0,
+                        `Lost: Over runs ${actualRuns} <= ${overMarket.target}`,
+                      );
+                    }
+                  } else {
+                    if (wonOver) {
+                      autoSettle(
+                        b.id,
+                        'lost',
+                        -b.stake,
+                        0,
+                        `Lost: Over runs ${actualRuns} > ${overMarket.target}`,
+                      );
+                    } else {
+                      autoSettle(
+                        b.id,
+                        'won',
+                        b.stake * (b.odds - 1),
+                        b.stake * b.odds,
+                        `Won: Over runs ${actualRuns} <= ${overMarket.target}`,
+                      );
+                    }
+                  }
+                }
+              }
+
+              // Reset over details
+              ld.ballsInOver = 0;
+              ld.runsInCurrentOver = 0;
+              ld.runsCurrentOverList = [];
+
+              // Rotate strike at end of over
+              ld.currentBatsmenIds = [nonStrikeIdx, strikeIdx];
+
+              // Update bowler's overs
+              bowlers[bowlerIdx] = {
+                ...bowlers[bowlerIdx],
+                overs: (bowlers[bowlerIdx].overs ?? 0) + 1,
+              };
+
+              // Select next bowler (cycle)
+              ld.currentBowlerId = (ld.currentBowlerId + 1) % bowlers.length;
+
+              // Generate new session markets for upcoming over
+              ld.sessionMarkets = ld.sessionMarkets.map((x) => {
+                if (x.type === 'over_runs') {
+                  return {
+                    id: `${m.id}-sm-over-${completedOverNum + 1}`,
+                    type: 'over_runs' as const,
+                    title: 'Next Over Runs',
+                    question: `Runs scored in Over ${completedOverNum + 1}`,
+                    target: Math.random() > 0.5 ? 8.5 : 7.5,
+                    oddsOver: 1.9,
+                    oddsUnder: 1.9,
+                    status: 'open' as const,
+                  };
+                }
+                if (x.type === 'partnership' && x.status === 'settled') {
+                  return {
+                    id: `${m.id}-sm-partnership-${completedOverNum + 1}`,
+                    type: 'partnership' as const,
+                    title: 'Partnership Runs',
+                    question: `Will current partnership cross ${ld.partnershipRuns + 25.5} runs?`,
+                    target: Math.round(ld.partnershipRuns + 25.5) + 0.5,
+                    oddsOver: 1.85,
+                    oddsUnder: 1.85,
+                    status: 'open' as const,
+                  };
+                }
+                return x;
+              });
+            }
+
+            // 3. Innings logic
+            const formatLimit = m.format === 'T20' ? 20 : m.format === 'ODI' ? 50 : 90;
+
+            if (ld.innings === 1) {
+              m.score = {
+                team1Score: `${ld.runs}/${ld.wickets}`,
+                team2Score: '',
+                overs: `${ld.oversBowled}`,
+              };
+
+              // Innings 1 completes
+              if (ld.wickets === 10 || Math.floor(ld.oversBowled) >= formatLimit) {
+                ld.innings = 2;
+                ld.battingTeam = m.team2.shortName;
+                ld.bowlingTeam = m.team1.shortName;
+                ld.target = ld.runs + 1;
+                ld.runs = 0;
+                ld.wickets = 0;
+                ld.oversBowled = 0.0;
+                ld.ballsInOver = 0;
+                ld.partnershipRuns = 0;
+                ld.partnershipBalls = 0;
+                ld.crr = 0;
+                ld.rrr = (ld.target / formatLimit) * 6;
+                ld.liveStatus = `Innings break! ${m.team2.shortName} needs ${ld.target} runs to win.`;
+
+                // Reset batsmen scorecard for team 2
+                ld.batsmen = ld.batsmen.map((b) => ({
+                  ...b,
+                  runs: 0,
+                  balls: 0,
+                  fours: 0,
+                  sixes: 0,
+                  isOut: false,
+                  howOut: undefined,
+                }));
+                ld.bowlers = ld.bowlers.map((b) => ({
+                  ...b,
+                  overs: 0,
+                  runsConceded: 0,
+                  wickets: 0,
+                }));
+                ld.currentBatsmenIds = [0, 1];
+                ld.currentBowlerId = 0;
+              }
+            } else {
+              m.score = {
+                team1Score: m.score?.team1Score,
+                team2Score: `${ld.runs}/${ld.wickets}`,
+                overs: `${ld.oversBowled}`,
+              };
+
+              const oversRemaining = formatLimit - Math.floor(ld.oversBowled) - ld.ballsInOver / 6;
+              ld.rrr = oversRemaining > 0 ? (ld.target! - ld.runs) / oversRemaining : 0;
+              ld.liveStatus = `${m.team2.shortName} needs ${ld.target! - ld.runs} runs in ${Math.round(
+                oversRemaining * 6,
+              )} balls.`;
+
+              // Check if Team 2 (Chasing Team) wins
+              if (ld.runs >= ld.target!) {
+                m.status = 'finished';
+                m.score = {
+                  ...m.score,
+                  result: `${m.team2.name} won by ${10 - ld.wickets} wickets`,
+                };
+
+                // Auto-settle Match Winner bets!
+                const matchBets = updatedBets.filter(
+                  (b) =>
+                    b.matchId === m.id &&
+                    b.status === 'running' &&
+                    b.marketType === 'Match Winner',
+                );
+                for (const b of matchBets) {
+                  if (b.selection === m.team2.name || b.selection === m.team2.shortName) {
+                    autoSettle(
+                      b.id,
+                      'won',
+                      b.stake * (b.odds - 1),
+                      b.stake * b.odds,
+                      `Auto-won: ${m.team2.shortName} won the match`,
+                    );
+                  } else {
+                    autoSettle(b.id, 'lost', -b.stake, 0, `Auto-lost: ${m.team2.shortName} won the match`);
+                  }
+                }
+              }
+              // Check if Team 1 wins
+              else if (ld.wickets === 10 || Math.floor(ld.oversBowled) >= formatLimit) {
+                m.status = 'finished';
+                if (ld.runs === ld.target! - 1) {
+                  m.score = {
+                    ...m.score,
+                    result: 'Match tied',
+                  };
+
+                  const matchBets = updatedBets.filter(
+                    (b) =>
+                      b.matchId === m.id &&
+                      b.status === 'running' &&
+                      b.marketType === 'Match Winner',
+                  );
+                  for (const b of matchBets) {
+                    autoSettle(b.id, 'void', 0, b.stake, 'Auto-void: Match tied');
+                  }
+                } else {
+                  m.score = {
+                    ...m.score,
+                    result: `${m.team1.name} won by ${ld.target! - 1 - ld.runs} runs`,
+                  };
+
+                  // Auto-settle Match Winner bets!
+                  const matchBets = updatedBets.filter(
+                    (b) =>
+                      b.matchId === m.id &&
+                      b.status === 'running' &&
+                      b.marketType === 'Match Winner',
+                  );
+                  for (const b of matchBets) {
+                    if (b.selection === m.team1.name || b.selection === m.team1.shortName) {
+                      autoSettle(
+                        b.id,
+                        'won',
+                        b.stake * (b.odds - 1),
+                        b.stake * b.odds,
+                        `Auto-won: ${m.team1.shortName} won the match`,
+                      );
+                    } else {
+                      autoSettle(b.id, 'lost', -b.stake, 0, `Auto-lost: ${m.team1.shortName} won the match`);
+                    }
+                  }
+                }
+              }
+            }
+
+            m.liveData = ld;
+            return m;
+          });
+
+          return {
+            ...(matchesChanged ? { matches: updatedMatches } : {}),
+            ...(betsChanged ? { bets: updatedBets } : {}),
+            ...(bankrollsChanged ? { bankrolls: updatedBankrolls } : {}),
+            ...(historyChanged ? { bankrollHistory: updatedHistory } : {}),
           };
         }),
     }),

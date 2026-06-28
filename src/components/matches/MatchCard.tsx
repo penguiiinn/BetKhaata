@@ -10,17 +10,25 @@ interface MatchCardProps {
 export default function MatchCard({ match }: MatchCardProps) {
   const openModal = useBetStore((s) => s.openModal);
   const setSelectedMatchId = useBetStore((s) => s.setSelectedMatchId);
-  const setActiveTab = useBetStore((s) => s.setActiveTab);
 
-  const handleAddBet = () => {
+  const handleAddBet = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setSelectedMatchId(match.id);
     openModal('addBet');
+  };
+
+  const handleOpenMatchCenter = () => {
+    setSelectedMatchId(match.id);
+    openModal('matchCenter');
   };
 
   const formatColor = getFormatColor(match.format);
 
   return (
-    <div className="bg-surface card-border rounded-xl overflow-hidden hover:bg-surface-light transition-all duration-200 card-border-hover">
+    <div
+      onClick={handleOpenMatchCenter}
+      className="bg-surface card-border rounded-xl overflow-hidden hover:bg-surface-light transition-all duration-200 card-border-hover cursor-pointer"
+    >
       {/* Header bar */}
       <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04]">
         <div className="flex items-center gap-2">

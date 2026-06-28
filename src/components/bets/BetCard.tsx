@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Clock, Pencil, Trash2 } from 'lucide-react';
 import type { Bet } from '../../types/types';
 import {
@@ -18,6 +19,13 @@ export default function BetCard({ bet }: BetCardProps) {
   const settleBet = useBetStore((s) => s.settleBet);
   const deleteBet = useBetStore((s) => s.deleteBet);
   const setEditBetId = useBetStore((s) => s.setEditBetId);
+  const matches = useBetStore((s) => s.matches);
+
+  const match = useMemo(
+    () => matches.find((m) => m.id === bet.matchId),
+    [matches, bet.matchId],
+  );
+
   const formatColor = getFormatColor(bet.format);
 
   const handleDelete = () => {
@@ -56,6 +64,21 @@ export default function BetCard({ bet }: BetCardProps) {
 
       {/* Body */}
       <div className="p-3.5">
+        {/* Live score if match is live */}
+        {match && match.status === 'live' && (
+          <div className="mb-3.5 bg-loss/[0.04] border border-loss/10 rounded-lg p-2 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="live-dot animate-pulse-soft" />
+              <span className="text-[9px] font-bold text-loss uppercase tracking-wider">Live Score</span>
+            </div>
+            <span className="font-bold text-white/95">
+              {match.score?.team1Score || '0/0'}
+              {match.score?.team2Score ? ` vs ${match.score.team2Score}` : ''}
+              {match.score?.overs ? ` (${match.score.overs} ov)` : ''}
+            </span>
+          </div>
+        )}
+
         {/* Market & Selection */}
         <div className="mb-3">
           <p className="text-[10px] text-dim uppercase tracking-wider font-medium mb-0.5">

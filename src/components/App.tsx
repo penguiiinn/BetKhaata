@@ -12,6 +12,7 @@ import DepositModal from './shared/DepositModal';
 import WithdrawModal from './shared/WithdrawModal';
 import SetLimitModal from './shared/SetLimitModal';
 import EditBetModal from './shared/EditBetModal';
+import MatchCenterModal from './shared/MatchCenterModal';
 import ErrorBoundary from './shared/ErrorBoundary';
 import { SkeletonCard, SkeletonChart, SkeletonBase } from './shared/SkeletonLoader';
 
@@ -36,6 +37,15 @@ function MainApp() {
       unsubFinishHydrate();
     };
   }, []);
+
+  // Periodic cricket engine simulation
+  useEffect(() => {
+    if (!hydrated) return;
+    const interval = setInterval(() => {
+      useBetStore.getState().tickCricketEngine();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [hydrated]);
 
   const renderSkeletonScreen = () => {
     switch (activeTab) {
@@ -156,6 +166,7 @@ function MainApp() {
       <WithdrawModal />
       <SetLimitModal />
       <EditBetModal />
+      <MatchCenterModal />
     </div>
   );
 }
