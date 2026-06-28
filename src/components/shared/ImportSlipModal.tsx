@@ -73,7 +73,7 @@ export default function ImportSlipModal() {
         name: '1xBet Slip (Virat Kohli Top Batter)',
         bookmaker: '1xBet',
         matchId: rcbMatch?.id || 'match-2',
-        matchTitle: rcbMatch ? `${rcbMatch.team1.shortName} vs rcbMatch.team2.shortName` : 'RCB vs KKR',
+        matchTitle: rcbMatch ? `${rcbMatch.team1.shortName} vs ${rcbMatch.team2.shortName}` : 'RCB vs KKR',
         marketType: 'Top Batter',
         selection: 'Virat Kohli',
         stake: 2500,
@@ -240,6 +240,7 @@ export default function ImportSlipModal() {
       status: 'running',
       profitLoss: 0,
       bankrollId: formData.bankrollId,
+      stage: 'league',
     });
 
     handleClose();
