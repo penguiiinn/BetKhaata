@@ -1,10 +1,6 @@
 import { useState } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
-import {
-  tournamentPerformanceData,
-  teamPerformanceData,
-  playerPerformanceData,
-} from '../../data/mockData';
+import { useBetStore, selectTournamentPerformance, selectTeamPerformance, selectPlayerPerformance } from '../../store/betStore';
 import { formatCurrency } from '../../utils/utils';
 import clsx from 'clsx';
 
@@ -50,9 +46,19 @@ export default function PerformanceBreakdown() {
 }
 
 function TournamentTable() {
+  const data = useBetStore(selectTournamentPerformance);
+
+  if (data.length === 0) {
+    return (
+      <div className="py-8 text-center text-xs text-dim">
+        No settled tournament data yet
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
-      {tournamentPerformanceData.map((t) => (
+      {data.map((t) => (
         <div
           key={t.tournament}
           className="flex items-center justify-between py-2 px-2.5 rounded-lg bg-dark/50 hover:bg-dark transition-colors"
@@ -73,7 +79,9 @@ function TournamentTable() {
                 {t.profitLoss >= 0 ? '+' : ''}
                 {formatCurrency(t.profitLoss)}
               </p>
-              <p className="text-[10px] text-dim">{t.winRate}% win</p>
+              <p className="text-[10px] text-dim">
+                {t.winRate}% win • ROI: {t.roi >= 0 ? '+' : ''}{t.roi.toFixed(1)}%
+              </p>
             </div>
             {t.profitLoss >= 0 ? (
               <TrendingUp className="w-3.5 h-3.5 text-profit" />
@@ -88,9 +96,19 @@ function TournamentTable() {
 }
 
 function TeamTable() {
+  const data = useBetStore(selectTeamPerformance);
+
+  if (data.length === 0) {
+    return (
+      <div className="py-8 text-center text-xs text-dim">
+        No settled team data yet
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
-      {teamPerformanceData.map((t) => (
+      {data.map((t) => (
         <div
           key={t.team}
           className="flex items-center justify-between py-2 px-2.5 rounded-lg bg-dark/50 hover:bg-dark transition-colors"
@@ -129,9 +147,19 @@ function TeamTable() {
 }
 
 function PlayerTable() {
+  const data = useBetStore(selectPlayerPerformance);
+
+  if (data.length === 0) {
+    return (
+      <div className="py-8 text-center text-xs text-dim">
+        No settled player data yet
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
-      {playerPerformanceData.map((p) => (
+      {data.map((p) => (
         <div
           key={p.player}
           className="flex items-center justify-between py-2 px-2.5 rounded-lg bg-dark/50 hover:bg-dark transition-colors"
@@ -165,3 +193,4 @@ function PlayerTable() {
     </div>
   );
 }
+

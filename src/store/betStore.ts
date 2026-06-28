@@ -13,6 +13,9 @@ import type {
   MatchStatus,
   TabId,
   Transaction,
+  TournamentPerformance,
+  TeamPerformance,
+  PlayerPerformance,
 } from '../types/types';
 import {
   mockBets,
@@ -31,6 +34,12 @@ interface BetFilters {
   tournament: string;
   search: string;
   sort: BetSortKey;
+  format: 'all' | 'IPL' | 'T20' | 'ODI' | 'Test';
+  marketType: string;
+  dateRange: {
+    start: string;
+    end: string;
+  };
 }
 
 interface Modals {
@@ -253,7 +262,16 @@ export const useBetStore = create<BetStore>()(
       // UI state (NOT persisted)
       activeTab: 'home',
       matchTab: 'live',
-      betFilters: { period: 'all', status: 'all', tournament: 'all', search: '', sort: 'newest' },
+      betFilters: {
+        period: 'all',
+        status: 'all',
+        tournament: 'all',
+        search: '',
+        sort: 'newest',
+        format: 'all',
+        marketType: 'all',
+        dateRange: { start: '', end: '' },
+      },
       modals: { addBet: false, deposit: false, withdraw: false, setLimit: false },
       selectedMatchId: null,
       editBetId: null,
@@ -629,236 +647,580 @@ export const useBetStore = create<BetStore>()(
 // reference equality to detect data changes — new refs on every render
 // cause infinite setState loops in ChartDataContextProvider.
 
-function createMemoSelector<T>(
+function createDependencySelector<T, D>(
   selector: (state: BetStore) => T,
-  isEqual: (a: T, b: T) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b),
+  getDependencies: (state: BetStore) => D,
+  areDepsEqual: (a: D, b: D) => boolean,
 ): (state: BetStore) => T {
+  let lastDeps: D | undefined;
   let lastResult: T | undefined;
   return (state: BetStore) => {
-    const newResult = selector(state);
-    if (lastResult !== undefined && isEqual(lastResult, newResult)) {
+    const newDeps = getDependencies(state);
+    if (lastResult !== undefined && lastDeps !== undefined && areDepsEqual(lastDeps, newDeps)) {
       return lastResult;
     }
-    lastResult = newResult;
-    return newResult;
+    lastDeps = newDeps;
+    lastResult = selector(state);
+    return lastResult;
   };
+}
+
+// Helper to determine the team associated with a bet
+function getTeamForBet(bet: Bet, matches: Match[]): string | null {
+  const match = matches.find((m) => m.id === bet.matchId);
+  const selectionLower = (bet.selection || '').toLowerCase();
+  
+  if (match) {
+    const t1 = match.team1;
+    const t2 = match.team2;
+    if (
+      selectionLower.includes(t1.name.toLowerCase()) || 
+      selectionLower.includes(t1.shortName.toLowerCase())
+    ) {
+      return t1.shortName;
+    }
+    if (
+      selectionLower.includes(t2.name.toLowerCase()) || 
+      selectionLower.includes(t2.shortName.toLowerCase())
+    ) {
+      return t2.shortName;
+    }
+  }
+
+  // player mappings to IPL/International team short names
+  if (selectionLower.includes('kohli')) return match?.tournament.includes('IPL') ? 'RCB' : 'IND';
+  if (selectionLower.includes('bumrah')) return match?.tournament.includes('IPL') ? 'MI' : 'IND';
+  if (selectionLower.includes('dhoni')) return 'CSK';
+  if (selectionLower.includes('rahul')) return match?.tournament.includes('IPL') ? 'PBKS' : 'IND';
+  if (selectionLower.includes('rohit')) return match?.tournament.includes('IPL') ? 'MI' : 'IND';
+  if (selectionLower.includes('cummins')) return match?.tournament.includes('IPL') ? 'SRH' : 'AUS';
+  if (selectionLower.includes('gill')) return match?.tournament.includes('IPL') ? 'GT' : 'IND';
+  if (selectionLower.includes('pant')) return match?.tournament.includes('IPL') ? 'DC' : 'IND';
+
+  // Fallback to match title substrings
+  const titleLower = (bet.matchTitle || '').toLowerCase();
+  if (titleLower.includes('csk')) return 'CSK';
+  if (titleLower.includes('mi')) return 'MI';
+  if (titleLower.includes('rcb')) return 'RCB';
+  if (titleLower.includes('kkr')) return 'KKR';
+  if (titleLower.includes('ind')) return 'IND';
+  if (titleLower.includes('pak')) return 'PAK';
+  if (titleLower.includes('aus')) return 'AUS';
+  if (titleLower.includes('pbks')) return 'PBKS';
+  if (titleLower.includes('lsg')) return 'LSG';
+  if (titleLower.includes('gt')) return 'GT';
+  if (titleLower.includes('dc')) return 'DC';
+  if (titleLower.includes('rr')) return 'RR';
+  if (titleLower.includes('srh')) return 'SRH';
+  if (titleLower.includes('eng')) return 'ENG';
+  if (titleLower.includes('sa')) return 'SA';
+
+  return null;
+}
+
+// Helper to extract player name from bet selection
+function getPlayerFromSelection(selection: string, marketType: string): string | null {
+  const lower = selection.toLowerCase();
+  if (marketType === 'Top Batter' || marketType === 'Top Bowler') {
+    return selection.trim();
+  }
+  
+  const players = [
+    'Virat Kohli',
+    'Jasprit Bumrah',
+    'MS Dhoni',
+    'KL Rahul',
+    'Rohit Sharma',
+    'Pat Cummins',
+    'Shubman Gill',
+    'Rishabh Pant',
+    'Hardik Pandya',
+    'Suryakumar Yadav',
+    'Travis Head',
+    'Mitchell Starc',
+    'Rashid Khan',
+    'Heinrich Klaasen',
+  ];
+  for (const p of players) {
+    if (lower.includes(p.toLowerCase())) {
+      return p;
+    }
+  }
+  
+  const match = selection.match(/^(.+?)\s+(Over|Under|To\s|Run|Wicket|Score|3\+|2\+)/i);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  
+  if (marketType === 'Player Runs' || marketType === 'Wickets') {
+    return selection.replace(/Over|Under|Runs|Wickets|\d+(\.\d+)?/gi, '').trim();
+  }
+  
+  return null;
 }
 
 // ── Selectors ─────────────────────────────────────────────────────────
 
-export const selectTodayPnL = (state: BetStore) =>
-  (state.bets || [])
-    .filter((b) => b && b.status !== 'running' && b.status !== 'void' && isToday(b.timePlaced))
-    .reduce((sum, b) => sum + (b?.profitLoss || 0), 0);
+export const selectTodayPnL = createDependencySelector(
+  (state: BetStore) =>
+    (state.bets || [])
+      .filter((b) => b && b.status !== 'running' && b.status !== 'void' && isToday(b.timePlaced))
+      .reduce((sum, b) => sum + (b?.profitLoss || 0), 0),
+  (state) => state.bets,
+  (a, b) => a === b,
+);
 
-export const selectWeeklyPnL = (state: BetStore) =>
-  (state.bets || [])
-    .filter((b) => b && b.status !== 'running' && b.status !== 'void' && isThisWeek(b.timePlaced))
-    .reduce((sum, b) => sum + (b?.profitLoss || 0), 0);
+export const selectWeeklyPnL = createDependencySelector(
+  (state: BetStore) =>
+    (state.bets || [])
+      .filter((b) => b && b.status !== 'running' && b.status !== 'void' && isThisWeek(b.timePlaced))
+      .reduce((sum, b) => sum + (b?.profitLoss || 0), 0),
+  (state) => state.bets,
+  (a, b) => a === b,
+);
 
-export const selectTotalExposure = (state: BetStore) =>
-  (state.bets || [])
-    .filter((b) => b && b.status === 'running')
-    .reduce((sum, b) => sum + (b?.stake || 0), 0);
+export const selectTotalExposure = createDependencySelector(
+  (state: BetStore) =>
+    (state.bets || [])
+      .filter((b) => b && b.status === 'running')
+      .reduce((sum, b) => sum + (b?.stake || 0), 0),
+  (state) => state.bets,
+  (a, b) => a === b,
+);
 
-export const selectActiveBetsCount = (state: BetStore) =>
-  (state.bets || []).filter((b) => b && b.status === 'running').length;
+export const selectActiveBetsCount = createDependencySelector(
+  (state: BetStore) =>
+    (state.bets || []).filter((b) => b && b.status === 'running').length,
+  (state) => state.bets,
+  (a, b) => a === b,
+);
 
-export const selectTotalBalance = (state: BetStore) =>
-  (state.bankrolls || []).reduce((sum, b) => sum + (b?.balance || 0), 0);
+export const selectTotalBalance = createDependencySelector(
+  (state: BetStore) =>
+    (state.bankrolls || []).reduce((sum, b) => sum + (b?.balance || 0), 0),
+  (state) => state.bankrolls,
+  (a, b) => a === b,
+);
 
-export const selectWinRate = (state: BetStore) => {
-  const settled = (state.bets || []).filter((b) => b && (b.status === 'won' || b.status === 'lost'));
-  if (settled.length === 0) return 0;
-  const won = settled.filter((b) => b && b.status === 'won').length;
-  return Math.round((won / settled.length) * 100);
-};
+export const selectWinRate = createDependencySelector(
+  (state: BetStore) => {
+    const settled = (state.bets || []).filter((b) => b && (b.status === 'won' || b.status === 'lost'));
+    if (settled.length === 0) return 0;
+    const won = settled.filter((b) => b && b.status === 'won').length;
+    return Math.round((won / settled.length) * 100);
+  },
+  (state) => state.bets,
+  (a, b) => a === b,
+);
 
-export const selectFilteredBets = createMemoSelector((state: BetStore) => {
-  const safeBets = Array.isArray(state.bets) ? state.bets : [];
-  let filtered = [...safeBets];
+export const selectFilteredBets = createDependencySelector(
+  (state: BetStore) => {
+    const safeBets = Array.isArray(state.bets) ? state.bets : [];
+    let filtered = [...safeBets];
 
-  const period = state.betFilters?.period ?? 'all';
-  const status = state.betFilters?.status ?? 'all';
-  const tournament = state.betFilters?.tournament ?? 'all';
-  const searchVal = state.betFilters?.search ?? '';
-  const sort = state.betFilters?.sort ?? 'newest';
+    const period = state.betFilters?.period ?? 'all';
+    const status = state.betFilters?.status ?? 'all';
+    const tournament = state.betFilters?.tournament ?? 'all';
+    const searchVal = state.betFilters?.search ?? '';
+    const sort = state.betFilters?.sort ?? 'newest';
+    const format = state.betFilters?.format ?? 'all';
+    const marketType = state.betFilters?.marketType ?? 'all';
+    const dateRange = state.betFilters?.dateRange;
 
-  if (period === 'today') filtered = filtered.filter((b) => b && isToday(b.timePlaced));
-  else if (period === 'week') filtered = filtered.filter((b) => b && isThisWeek(b.timePlaced));
+    // Period filter
+    if (period === 'today') filtered = filtered.filter((b) => b && isToday(b.timePlaced));
+    else if (period === 'week') filtered = filtered.filter((b) => b && isThisWeek(b.timePlaced));
 
-  if (status !== 'all') filtered = filtered.filter((b) => b && b.status === status);
-  if (tournament !== 'all') filtered = filtered.filter((b) => b && b.tournament === tournament);
+    // Status filter
+    if (status !== 'all') filtered = filtered.filter((b) => b && b.status === status);
 
-  if (searchVal.trim()) {
-    const q = searchVal.toLowerCase().trim();
-    filtered = filtered.filter(
-      (b) =>
-        b &&
-        ((b.matchTitle || '').toLowerCase().includes(q) ||
-          (b.selection || '').toLowerCase().includes(q) ||
-          (b.tournament || '').toLowerCase().includes(q) ||
-          (b.marketType || '').toLowerCase().includes(q)),
-    );
-  }
+    // Tournament filter
+    if (tournament !== 'all') filtered = filtered.filter((b) => b && b.tournament === tournament);
 
-  switch (sort) {
-    case 'newest':
-      filtered.sort(
-        (a, b) =>
-          new Date(b?.timePlaced || 0).getTime() - new Date(a?.timePlaced || 0).getTime(),
-      );
-      break;
-    case 'oldest':
-      filtered.sort(
-        (a, b) =>
-          new Date(a?.timePlaced || 0).getTime() - new Date(b?.timePlaced || 0).getTime(),
-      );
-      break;
-    case 'highest_stake':
-      filtered.sort((a, b) => (b?.stake || 0) - (a?.stake || 0));
-      break;
-    case 'highest_profit':
-      filtered.sort((a, b) => (b?.profitLoss || 0) - (a?.profitLoss || 0));
-      break;
-  }
+    // Format filter (IPL, T20, ODI, Test)
+    if (format !== 'all') {
+      if (format === 'IPL') {
+        filtered = filtered.filter((b) => b && b.tournament.toLowerCase().includes('ipl'));
+      } else {
+        filtered = filtered.filter((b) => b && b.format === format);
+      }
+    }
 
-  return filtered;
-});
+    // MarketType filter
+    if (marketType !== 'all') filtered = filtered.filter((b) => b && b.marketType === marketType);
 
-export const selectRunningBets = (state: BetStore) =>
-  (Array.isArray(state.bets) ? state.bets : []).filter((b) => b && b.status === 'running');
+    // DateRange filter
+    if (dateRange) {
+      if (dateRange.start) {
+        const startMs = dayjs(dateRange.start).startOf('day').valueOf();
+        filtered = filtered.filter((b) => b && dayjs(b.timePlaced).valueOf() >= startMs);
+      }
+      if (dateRange.end) {
+        const endMs = dayjs(dateRange.end).endOf('day').valueOf();
+        filtered = filtered.filter((b) => b && dayjs(b.timePlaced).valueOf() <= endMs);
+      }
+    }
 
-export const selectMatchesByStatus = (status: MatchStatus) => (state: BetStore) =>
-  (state.matches || []).filter((m) => m && m.status === status);
+    // Search query engine (search by team, player, match, venue, selection)
+    if (searchVal.trim()) {
+      const q = searchVal.toLowerCase().trim();
+      filtered = filtered.filter((b) => {
+        if (!b) return false;
+        const matchTitle = (b.matchTitle || '').toLowerCase();
+        const selection = (b.selection || '').toLowerCase();
+        const tournamentStr = (b.tournament || '').toLowerCase();
+        const mType = (b.marketType || '').toLowerCase();
+        
+        const inBasic = matchTitle.includes(q) || selection.includes(q) || tournamentStr.includes(q) || mType.includes(q);
+        if (inBasic) return true;
+        
+        const match = state.matches.find((m) => m.id === b.matchId);
+        if (match) {
+          return (
+            match.team1.name.toLowerCase().includes(q) ||
+            match.team1.shortName.toLowerCase().includes(q) ||
+            match.team2.name.toLowerCase().includes(q) ||
+            match.team2.shortName.toLowerCase().includes(q) ||
+            (match.venue || '').toLowerCase().includes(q)
+          );
+        }
+        return false;
+      });
+    }
 
-export const selectTournaments = (state: BetStore) => {
-  const s = new Set((state.bets || []).filter((b) => b && b.tournament).map((b) => b.tournament));
-  return Array.from(s);
-};
+    // Sorting
+    switch (sort) {
+      case 'newest':
+        filtered.sort(
+          (a, b) =>
+            new Date(b?.timePlaced || 0).getTime() - new Date(a?.timePlaced || 0).getTime(),
+        );
+        break;
+      case 'oldest':
+        filtered.sort(
+          (a, b) =>
+            new Date(a?.timePlaced || 0).getTime() - new Date(b?.timePlaced || 0).getTime(),
+        );
+        break;
+      case 'highest_stake':
+        filtered.sort((a, b) => (b?.stake || 0) - (a?.stake || 0));
+        break;
+      case 'highest_profit':
+        filtered.sort((a, b) => (b?.profitLoss || 0) - (a?.profitLoss || 0));
+        break;
+    }
+
+    return filtered;
+  },
+  (state) => ({
+    bets: state.bets,
+    matches: state.matches,
+    filters: state.betFilters,
+  }),
+  (a, b) =>
+    a.bets === b.bets &&
+    a.matches === b.matches &&
+    a.filters.period === b.filters.period &&
+    a.filters.status === b.filters.status &&
+    a.filters.tournament === b.filters.tournament &&
+    a.filters.search === b.filters.search &&
+    a.filters.sort === b.filters.sort &&
+    a.filters.format === b.filters.format &&
+    a.filters.marketType === b.filters.marketType &&
+    a.filters.dateRange?.start === b.filters.dateRange?.start &&
+    a.filters.dateRange?.end === b.filters.dateRange?.end
+);
+
+export const selectRunningBets = createDependencySelector(
+  (state: BetStore) =>
+    (Array.isArray(state.bets) ? state.bets : []).filter((b) => b && b.status === 'running'),
+  (state) => state.bets,
+  (a, b) => a === b,
+);
+
+export const selectMatchesByStatus = (status: MatchStatus) =>
+  createDependencySelector(
+    (state: BetStore) => (state.matches || []).filter((m) => m && m.status === status),
+    (state) => state.matches,
+    (a, b) => a === b,
+  );
+
+export const selectTournaments = createDependencySelector(
+  (state: BetStore) => {
+    const s = new Set((state.bets || []).filter((b) => b && b.tournament).map((b) => b.tournament));
+    return Array.from(s);
+  },
+  (state) => state.bets,
+  (a, b) => a === b,
+);
 
 // ── Analytics Selectors (Memoized) ────────────────────────────────────
 
-export const selectAnalytics = createMemoSelector((state: BetStore): AnalyticsSnapshot => {
-  const safeBets = Array.isArray(state.bets) ? state.bets : [];
+export const selectAnalytics = createDependencySelector(
+  (state: BetStore): AnalyticsSnapshot => {
+    const safeBets = Array.isArray(state.bets) ? state.bets : [];
+    const settled = safeBets.filter((b) => b && (b.status === 'won' || b.status === 'lost'));
 
-  const settled = safeBets.filter((b) => b && (b.status === 'won' || b.status === 'lost'));
+    const totalBets = safeBets.length;
+    const activeBets = safeBets.filter((b) => b && b.status === 'running').length;
 
-  const totalBets = safeBets.length;
-  const activeBets = safeBets.filter((b) => b && b.status === 'running').length;
+    const totalSettled = settled.length;
+    const won = settled.filter((b) => b && b.status === 'won').length;
+    const lost = settled.filter((b) => b && b.status === 'lost').length;
 
-  const totalSettled = settled.length;
-  const won = settled.filter((b) => b && b.status === 'won').length;
-  const lost = settled.filter((b) => b && b.status === 'lost').length;
+    const winRate = totalSettled > 0 ? Math.round((won / totalSettled) * 100) : 0;
+    const lossRate = totalSettled > 0 ? Math.round((lost / totalSettled) * 100) : 0;
 
-  const winRate = totalSettled > 0 ? Math.round((won / totalSettled) * 100) : 0;
-  const lossRate = totalSettled > 0 ? Math.round((lost / totalSettled) * 100) : 0;
+    const totalPnL = settled.reduce((sum, b) => sum + (Number(b?.profitLoss) || 0), 0);
 
-  const totalPnL = settled.reduce((sum, b) => sum + (Number(b?.profitLoss) || 0), 0);
+    const currentExposure = safeBets
+      .filter((b) => b && b.status === 'running')
+      .reduce((sum, b) => sum + (Number(b?.stake) || 0), 0);
 
-  const currentExposure = safeBets
-    .filter((b) => b && b.status === 'running')
-    .reduce((sum, b) => sum + (Number(b?.stake) || 0), 0);
+    const {
+      bestWin: bestWinStreak,
+      worstLoss: worstLoseStreak,
+      currentStreakType,
+      currentStreakLength,
+    } = computeStreaks(safeBets as any);
 
-  const {
-    bestWin: bestWinStreak,
-    worstLoss: worstLoseStreak,
-    currentStreakType,
-    currentStreakLength,
-  } = computeStreaks(safeBets as any);
+    const averageOdds =
+      totalBets > 0
+        ? safeBets.reduce((sum, b) => sum + (Number(b?.odds) || 0), 0) / totalBets
+        : 0;
 
-  const averageOdds =
-    totalBets > 0
-      ? safeBets.reduce((sum, b) => sum + (Number(b?.odds) || 0), 0) / totalBets
-      : 0;
+    const totalStaked = settled.reduce((sum, b) => sum + (Number(b?.stake) || 0), 0);
+    const roiPercent = totalStaked > 0 ? (totalPnL / totalStaked) * 100 : 0;
 
-  const totalStaked = settled.reduce((sum, b) => sum + (Number(b?.stake) || 0), 0);
-  const roiPercent = totalStaked > 0 ? (totalPnL / totalStaked) * 100 : 0;
+    return {
+      totalBets,
+      winRate,
+      lossRate,
+      totalPnL,
+      currentExposure,
+      bestWinStreak,
+      worstLoseStreak,
+      currentStreakType,
+      currentStreakLength,
+      averageOdds,
+      roiPercent,
+      totalSettled,
+      activeBets,
+    };
+  },
+  (state) => state.bets,
+  (a, b) => a === b,
+);
 
-  return {
-    totalBets,
-    winRate,
-    lossRate,
-    totalPnL,
-    currentExposure,
-    bestWinStreak,
-    worstLoseStreak,
-    currentStreakType,
-    currentStreakLength,
-    averageOdds,
-    roiPercent,
-    totalSettled,
-    activeBets,
-  };
-});
+export const selectDailyPnLFromBets = createDependencySelector(
+  (state: BetStore): DailyPnL[] => {
+    const safeBets = Array.isArray(state.bets) ? state.bets : [];
+    const settled = safeBets.filter((b) => b && (b.status === 'won' || b.status === 'lost'));
 
-export const selectDailyPnLFromBets = createMemoSelector((state: BetStore): DailyPnL[] => {
-  const safeBets = Array.isArray(state.bets) ? state.bets : [];
-  const settled = safeBets.filter((b) => b && (b.status === 'won' || b.status === 'lost'));
+    const grouped: Record<string, { profit: number; loss: number }> = {};
 
-  const grouped: Record<string, { profit: number; loss: number }> = {};
+    for (const bet of settled) {
+      if (!bet || !bet.timePlaced) continue;
+      const date = dayjs(bet.timePlaced).format('YYYY-MM-DD');
+      if (!grouped[date]) grouped[date] = { profit: 0, loss: 0 };
 
-  for (const bet of settled) {
-    if (!bet || !bet.timePlaced) continue;
-    const date = dayjs(bet.timePlaced).format('YYYY-MM-DD');
-    if (!grouped[date]) grouped[date] = { profit: 0, loss: 0 };
-
-    const profitLoss = Number(bet.profitLoss) || 0;
-    if (profitLoss >= 0) grouped[date].profit += profitLoss;
-    else grouped[date].loss += profitLoss;
-  }
-
-  return Object.entries(grouped)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-14)
-    .map(([date, { profit, loss }]) => ({
-      date,
-      label: dayjs(date).format('DD MMM'),
-      profit,
-      loss,
-      net: profit + loss,
-    }));
-});
-
-export const selectBankrollGrowthData = createMemoSelector((
-  state: BetStore,
-): { date: string; balance: number }[] => {
-  const safeHistory = Array.isArray(state.bankrollHistory) ? state.bankrollHistory : [];
-
-  const entries = [...safeHistory]
-    .filter((e) => e && e.timestamp)
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-  const bankrollLatest: Record<string, Record<string, number>> = {};
-
-  for (const entry of entries) {
-    if (!entry || typeof entry.bankrollId !== 'string') continue;
-
-    const date = dayjs(entry.timestamp).format('YYYY-MM-DD');
-    if (!bankrollLatest[date]) {
-      const prevDates = Object.keys(bankrollLatest).sort();
-      const prevDate = prevDates[prevDates.length - 1];
-      bankrollLatest[date] = prevDate ? { ...bankrollLatest[prevDate] } : {};
+      const profitLoss = Number(bet.profitLoss) || 0;
+      if (profitLoss >= 0) grouped[date].profit += profitLoss;
+      else grouped[date].loss += profitLoss;
     }
 
-    const balance = Number(entry.balance) || 0;
-    bankrollLatest[date][entry.bankrollId] = balance;
-  }
+    return Object.entries(grouped)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-14)
+      .map(([date, { profit, loss }]) => ({
+        date,
+        label: dayjs(date).format('DD MMM'),
+        profit,
+        loss,
+        net: profit + loss,
+      }));
+  },
+  (state) => state.bets,
+  (a, b) => a === b,
+);
 
-  return Object.entries(bankrollLatest)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, balances]) => ({
-      date,
-      balance: Object.values(balances).reduce((sum, b) => sum + (b || 0), 0),
-    }));
-});
+export const selectBankrollGrowthData = createDependencySelector(
+  (state: BetStore): { date: string; balance: number }[] => {
+    const safeHistory = Array.isArray(state.bankrollHistory) ? state.bankrollHistory : [];
 
-export const selectWinLossPieData = createMemoSelector((state: BetStore): { name: string; value: number }[] => {
-  const won = (state.bets || []).filter((b) => b && b.status === 'won').length;
-  const lost = (state.bets || []).filter((b) => b && b.status === 'lost').length;
-  return [
-    { name: 'Won', value: won },
-    { name: 'Lost', value: lost },
-  ];
-});
+    const entries = [...safeHistory]
+      .filter((e) => e && e.timestamp)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    const bankrollLatest: Record<string, Record<string, number>> = {};
+
+    for (const entry of entries) {
+      if (!entry || typeof entry.bankrollId !== 'string') continue;
+
+      const date = dayjs(entry.timestamp).format('YYYY-MM-DD');
+      if (!bankrollLatest[date]) {
+        const prevDates = Object.keys(bankrollLatest).sort();
+        const prevDate = prevDates[prevDates.length - 1];
+        bankrollLatest[date] = prevDate ? { ...bankrollLatest[prevDate] } : {};
+      }
+
+      const balance = Number(entry.balance) || 0;
+      bankrollLatest[date][entry.bankrollId] = balance;
+    }
+
+    return Object.entries(bankrollLatest)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, balances]) => ({
+        date,
+        balance: Object.values(balances).reduce((sum, b) => sum + (b || 0), 0),
+      }));
+  },
+  (state) => state.bankrollHistory,
+  (a, b) => a === b,
+);
+
+export const selectWinLossPieData = createDependencySelector(
+  (state: BetStore): { name: string; value: number }[] => {
+    const won = (state.bets || []).filter((b) => b && b.status === 'won').length;
+    const lost = (state.bets || []).filter((b) => b && b.status === 'lost').length;
+    return [
+      { name: 'Won', value: won },
+      { name: 'Lost', value: lost },
+    ];
+  },
+  (state) => state.bets,
+  (a, b) => a === b,
+);
+
+// ── Dynamic Performance Tables Selectors ───────────────────────────────
+
+export const selectTournamentPerformance = createDependencySelector(
+  (state: BetStore): (TournamentPerformance & { roi: number })[] => {
+    const settled = (state.bets || []).filter((b) => b && (b.status === 'won' || b.status === 'lost'));
+    const grouped: Record<string, { total: number; won: number; lost: number; pnl: number; stake: number }> = {};
+    
+    for (const b of settled) {
+      const t = b.tournament || 'Unknown';
+      if (!grouped[t]) {
+        grouped[t] = { total: 0, won: 0, lost: 0, pnl: 0, stake: 0 };
+      }
+      grouped[t].total++;
+      if (b.status === 'won') grouped[t].won++;
+      else if (b.status === 'lost') grouped[t].lost++;
+      grouped[t].pnl += b.profitLoss;
+      grouped[t].stake += b.stake;
+    }
+    
+    return Object.entries(grouped).map(([tournament, s]) => ({
+      tournament,
+      totalBets: s.total,
+      won: s.won,
+      lost: s.lost,
+      profitLoss: s.pnl,
+      winRate: s.total > 0 ? Math.round((s.won / s.total) * 100) : 0,
+      roi: s.stake > 0 ? (s.pnl / s.stake) * 100 : 0,
+    })).sort((a, b) => b.profitLoss - a.profitLoss);
+  },
+  (state) => state.bets,
+  (a, b) => a === b,
+);
+
+export const selectTeamPerformance = createDependencySelector(
+  (state: BetStore): TeamPerformance[] => {
+    const settled = (state.bets || []).filter((b) => b && (b.status === 'won' || b.status === 'lost'));
+    const matches = state.matches || [];
+    const grouped: Record<string, { total: number; won: number; lost: number; pnl: number }> = {};
+    
+    for (const b of settled) {
+      const team = getTeamForBet(b, matches);
+      if (!team) continue;
+      if (!grouped[team]) {
+        grouped[team] = { total: 0, won: 0, lost: 0, pnl: 0 };
+      }
+      grouped[team].total++;
+      if (b.status === 'won') grouped[team].won++;
+      else if (b.status === 'lost') grouped[team].lost++;
+      grouped[team].pnl += b.profitLoss;
+    }
+    
+    return Object.entries(grouped).map(([team, s]) => ({
+      team,
+      betsOn: s.total,
+      profitLoss: s.pnl,
+      winRate: s.total > 0 ? Math.round((s.won / s.total) * 100) : 0,
+    })).sort((a, b) => b.profitLoss - a.profitLoss);
+  },
+  (state) => ({ bets: state.bets, matches: state.matches }),
+  (a, b) => a.bets === b.bets && a.matches === b.matches,
+);
+
+export const selectPlayerPerformance = createDependencySelector(
+  (state: BetStore): PlayerPerformance[] => {
+    const settled = (state.bets || []).filter((b) => b && (b.status === 'won' || b.status === 'lost'));
+    const grouped: Record<string, { total: number; won: number; lost: number; pnl: number; market: string }> = {};
+    
+    for (const b of settled) {
+      const player = getPlayerFromSelection(b.selection, b.marketType);
+      if (!player) continue;
+      if (!grouped[player]) {
+        grouped[player] = { total: 0, won: 0, lost: 0, pnl: 0, market: b.marketType };
+      }
+      grouped[player].total++;
+      if (b.status === 'won') grouped[player].won++;
+      else if (b.status === 'lost') grouped[player].lost++;
+      grouped[player].pnl += b.profitLoss;
+    }
+    
+    return Object.entries(grouped).map(([player, s]) => ({
+      player,
+      market: s.market,
+      bets: s.total,
+      profitLoss: s.pnl,
+      winRate: s.total > 0 ? Math.round((s.won / s.total) * 100) : 0,
+    })).sort((a, b) => b.profitLoss - a.profitLoss);
+  },
+  (state) => state.bets,
+  (a, b) => a === b,
+);
+
+export interface MarketPerformance {
+  marketType: string;
+  totalBets: number;
+  won: number;
+  lost: number;
+  profitLoss: number;
+  winRate: number;
+  roi: number;
+}
+
+export const selectMarketPerformance = createDependencySelector(
+  (state: BetStore): MarketPerformance[] => {
+    const settled = (state.bets || []).filter((b) => b && (b.status === 'won' || b.status === 'lost'));
+    const grouped: Record<string, { total: number; won: number; lost: number; pnl: number; stake: number }> = {};
+    
+    for (const b of settled) {
+      const m = b.marketType || 'Unknown';
+      if (!grouped[m]) {
+        grouped[m] = { total: 0, won: 0, lost: 0, pnl: 0, stake: 0 };
+      }
+      grouped[m].total++;
+      if (b.status === 'won') grouped[m].won++;
+      else if (b.status === 'lost') grouped[m].lost++;
+      grouped[m].pnl += b.profitLoss;
+      grouped[m].stake += b.stake;
+    }
+    
+    return Object.entries(grouped).map(([marketType, s]) => ({
+      marketType,
+      totalBets: s.total,
+      won: s.won,
+      lost: s.lost,
+      profitLoss: s.pnl,
+      winRate: s.total > 0 ? Math.round((s.won / s.total) * 100) : 0,
+      roi: s.stake > 0 ? (s.pnl / s.stake) * 100 : 0,
+    })).sort((a, b) => b.profitLoss - a.profitLoss);
+  },
+  (state) => state.bets,
+  (a, b) => a === b,
+);
 

@@ -329,3 +329,36 @@ export function exportBankrollHistoryCSV(
   const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
   downloadCSV(`betkhaata_bankroll_history_${dayjs().format('YYYY-MM-DD')}.csv`, csv);
 }
+
+export function exportBetsJSON(
+  bets: {
+    id: string;
+    matchTitle: string;
+    tournament: string;
+    format: string;
+    marketType: string;
+    selection: string;
+    stake: number;
+    odds: number;
+    timePlaced: string;
+    status: string;
+    profitLoss: number;
+  }[] = [],
+) {
+  if (!bets || bets.length === 0) {
+    alert('No bets to export.');
+    return;
+  }
+  const jsonContent = JSON.stringify(bets, null, 2);
+  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `betkhaata_bets_${dayjs().format('YYYY-MM-DD')}.json`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+

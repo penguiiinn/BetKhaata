@@ -1,6 +1,6 @@
-import { ClipboardList, Search, Download, ArrowUpDown } from 'lucide-react';
+import { ClipboardList, Search, Download, FileJson, ArrowUpDown } from 'lucide-react';
 import { useBetStore, selectWinRate, selectFilteredBets } from '../../store/betStore';
-import { exportBetsCSV } from '../../utils/utils';
+import { exportBetsCSV, exportBetsJSON } from '../../utils/utils';
 import FilterChips from './FilterChips';
 import BetCard from './BetCard';
 import type { BetSortKey } from '../../types/types';
@@ -19,10 +19,6 @@ export default function BetsScreen() {
   const winRate = useBetStore(selectWinRate);
   const filteredBets = useBetStore(selectFilteredBets);
 
-  const handleExport = () => {
-    exportBetsCSV(filteredBets);
-  };
-
   return (
     <div className="px-4 py-4 w-full max-w-[430px] md:max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto">
       {/* Header with stats */}
@@ -30,7 +26,6 @@ export default function BetsScreen() {
         className="flex items-center justify-between mb-4 animate-slide-up"
         style={{ opacity: 0 }}
       >
-        {/* ... (remaining elements unchanged) ... */}
         <div>
           <h2 className="text-lg font-bold">My Bets</h2>
           <p className="text-xs text-muted mt-0.5">
@@ -39,11 +34,18 @@ export default function BetsScreen() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleExport}
+            onClick={() => exportBetsCSV(filteredBets)}
             className="w-9 h-9 rounded-xl bg-surface card-border flex items-center justify-center hover:bg-surface-light transition-colors tap-effect"
             title="Export as CSV"
           >
             <Download className="w-4 h-4 text-muted" />
+          </button>
+          <button
+            onClick={() => exportBetsJSON(filteredBets)}
+            className="w-9 h-9 rounded-xl bg-surface card-border flex items-center justify-center hover:bg-surface-light transition-colors tap-effect"
+            title="Export as JSON"
+          >
+            <FileJson className="w-4 h-4 text-muted" />
           </button>
           <div className="bg-surface card-border rounded-xl px-3 py-2 text-center">
             <p className="text-[10px] text-dim uppercase">Win Rate</p>

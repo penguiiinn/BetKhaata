@@ -15,7 +15,7 @@ import WinRateChart from './WinRateChart';
 import DailyPnLChart from './DailyPnLChart';
 import PerformanceBreakdown from './PerformanceBreakdown';
 import { hourlyBettingData, lossChaseWarning, dailyPnLData } from '../../data/mockData';
-import { useBetStore, selectAnalytics, selectBankrollGrowthData, selectDailyPnLFromBets } from '../../store/betStore';
+import { useBetStore, selectAnalytics, selectBankrollGrowthData, selectDailyPnLFromBets, selectMarketPerformance } from '../../store/betStore';
 import { formatCurrency, formatCurrencyWithSign, exportBankrollHistoryCSV } from '../../utils/utils';
 import dayjs from 'dayjs';
 
@@ -81,6 +81,14 @@ export default function InsightsScreen() {
         <HourlyChart />
       </div>
 
+      {/* Market Performance Card */}
+      <div
+        className="min-w-0 animate-slide-up stagger-6"
+        style={{ opacity: 0 }}
+      >
+        <MarketPerformanceCard />
+      </div>
+
       {/* Loss Chasing Warning */}
       {lossChaseWarning.detected && (
         <div
@@ -139,6 +147,14 @@ function AnalyticsDashboard({ analytics }: { analytics: ReturnType<typeof select
       color: '#F5A623',
     },
     {
+      label: 'Streak',
+      value: analytics.currentStreakType === 'none'
+        ? '—'
+        : `${analytics.currentStreakLength}${analytics.currentStreakType === 'win' ? 'W' : 'L'}`,
+      icon: Flame,
+      color: analytics.currentStreakType === 'win' ? '#00C896' : analytics.currentStreakType === 'loss' ? '#FF5C72' : '#8B8FA3',
+    },
+    {
       label: 'Best Streak',
       value: `${analytics.bestWinStreak}W`,
       icon: Flame,
@@ -189,7 +205,7 @@ function AnalyticsDashboard({ analytics }: { analytics: ReturnType<typeof select
           Export
         </button>
       </div>
-      <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-11 gap-2 md:gap-3">
+      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12 gap-2 md:gap-3">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
@@ -458,6 +474,93 @@ function HourlyChart() {
   );
 }
 
+// ── Market Performance Card ───────────────────────────────────────────
+
+function MarketPerformanceCard() {
+  const data = useBetStore(selectMarketPerformance);
+
+  if (data.length === 0) {
+    return (
+      <div className="bg-surface card-border rounded-xl p-4">
+        <h3 className="text-sm font-semibold mb-1">Market Performance</h3>
+        <p className="text-[10px] text-dim mb-4">Your most and least profitable market types</p>
+        <div className="h-40 flex items-center justify-center">
+          <p className="text-xs text-muted">No settled bets data yet</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Best is first in sorted list, worst is last
+  const bestMarket = data[0];
+  const worstMarket = data.length > 1 ? data[data.length - 1] : null;
+
+  return (
+    <div className="bg-surface card-border rounded-xl p-4 flex flex-col justify-between">
+      <div>
+        <h3 className="text-sm font-semibold mb-1">Market Performance</h3>
+        <p className="text-[10px] text-dim mb-4">Profitability by market type</p>
+        
+        <div className="space-y-3">
+          {/* Best Market */}
+          {bestMarket && bestMarket.profitLoss > 0 ? (
+            <div className="p-3 rounded-lg bg-profit/[0.04] border border-profit/10">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold text-profit uppercase tracking-wider">Best Market Type</span>
+                <span className="text-xs font-extrabold text-profit">+{formatCurrency(bestMarket.profitLoss)}</span>
+              </div>
+              <p className="text-xs font-semibold text-white">{bestMarket.marketType}</p>
+              <p className="text-[10px] text-muted mt-0.5">
+                {bestMarket.totalBets} bets • {bestMarket.winRate}% win rate • ROI: +{bestMarket.roi.toFixed(1)}%
+              </p>
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.06] text-center text-xs text-dim">
+              No profitable markets yet
+            </div>
+          )}
+
+          {/* Worst Market */}
+          {worstMarket && worstMarket.profitLoss < 0 ? (
+            <div className="p-3 rounded-lg bg-loss/[0.04] border border-loss/10">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold text-loss uppercase tracking-wider">Worst Market Type</span>
+                <span className="text-xs font-extrabold text-loss">{formatCurrency(worstMarket.profitLoss)}</span>
+              </div>
+              <p className="text-xs font-semibold text-white">{worstMarket.marketType}</p>
+              <p className="text-[10px] text-muted mt-0.5">
+                {worstMarket.totalBets} bets • {worstMarket.winRate}% win rate • ROI: {worstMarket.roi.toFixed(1)}%
+              </p>
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.06] text-center text-xs text-dim">
+              No losing markets yet
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mini list of all markets */}
+      <div className="mt-4 pt-3 border-t border-white/[0.04] space-y-2">
+        <p className="text-[10px] text-dim font-bold uppercase tracking-wider">All Markets Summary</p>
+        <div className="max-h-[120px] overflow-y-auto pr-1 space-y-1.5">
+          {data.map((m) => (
+            <div key={m.marketType} className="flex items-center justify-between text-[11px]">
+              <span className="text-muted truncate max-w-[140px]">{m.marketType}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-dim">{m.totalBets}b</span>
+                <span className={m.profitLoss >= 0 ? 'text-profit font-semibold' : 'text-loss font-semibold'}>
+                  {m.profitLoss >= 0 ? '+' : ''}{formatCurrency(m.profitLoss, true)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Loss Chasing Alert ────────────────────────────────────────────────
 
 function LossChasingAlert() {
@@ -487,3 +590,4 @@ function LossChasingAlert() {
     </div>
   );
 }
+
