@@ -13,6 +13,7 @@ import WithdrawModal from './shared/WithdrawModal';
 import SetLimitModal from './shared/SetLimitModal';
 import EditBetModal from './shared/EditBetModal';
 import MatchCenterModal from './shared/MatchCenterModal';
+import ImportSlipModal from './shared/ImportSlipModal';
 import ErrorBoundary from './shared/ErrorBoundary';
 import { SkeletonCard, SkeletonChart, SkeletonBase } from './shared/SkeletonLoader';
 
@@ -167,6 +168,7 @@ function MainApp() {
       <SetLimitModal />
       <EditBetModal />
       <MatchCenterModal />
+      <ImportSlipModal />
     </div>
   );
 }

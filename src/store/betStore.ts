@@ -48,6 +48,7 @@ interface Modals {
   withdraw: boolean;
   setLimit: boolean;
   matchCenter: boolean;
+  importSlip: boolean;
 }
 
 // ── Store Interface ───────────────────────────────────────────────────
@@ -280,7 +281,7 @@ export const useBetStore = create<BetStore>()(
         marketType: 'all',
         dateRange: { start: '', end: '' },
       },
-      modals: { addBet: false, deposit: false, withdraw: false, setLimit: false, matchCenter: false },
+      modals: { addBet: false, deposit: false, withdraw: false, setLimit: false, matchCenter: false, importSlip: false },
       selectedMatchId: null,
       editBetId: null,
       prefilledBet: undefined,
@@ -296,7 +297,7 @@ export const useBetStore = create<BetStore>()(
       closeModal: (modal) => set((s) => ({ modals: { ...s.modals, [modal]: false } })),
       closeAllModals: () =>
         set({
-          modals: { addBet: false, deposit: false, withdraw: false, setLimit: false, matchCenter: false },
+          modals: { addBet: false, deposit: false, withdraw: false, setLimit: false, matchCenter: false, importSlip: false },
         }),
 
       setSelectedMatchId: (id) => set({ selectedMatchId: id }),

@@ -1,4 +1,4 @@
-import { ClipboardList, Search, Download, FileJson, ArrowUpDown } from 'lucide-react';
+import { ClipboardList, Search, Download, FileJson, ArrowUpDown, FileUp } from 'lucide-react';
 import { useBetStore, selectWinRate, selectFilteredBets } from '../../store/betStore';
 import { exportBetsCSV, exportBetsJSON } from '../../utils/utils';
 import FilterChips from './FilterChips';
@@ -18,13 +18,14 @@ export default function BetsScreen() {
   const setBetFilters = useBetStore((s) => s.setBetFilters);
   const winRate = useBetStore(selectWinRate);
   const filteredBets = useBetStore(selectFilteredBets);
+  const openModal = useBetStore((s) => s.openModal);
 
   return (
     <div className="px-4 py-4 w-full max-w-[430px] md:max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto">
       {/* Header with stats */}
       <div
         className="flex items-center justify-between mb-4 animate-slide-up"
-        style={{ opacity: 0 }}
+        style={{ opacity: 1 }}
       >
         <div>
           <h2 className="text-lg font-bold">My Bets</h2>
@@ -33,6 +34,13 @@ export default function BetsScreen() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => openModal('importSlip')}
+            className="w-9 h-9 rounded-xl bg-surface card-border flex items-center justify-center hover:bg-surface-light transition-colors tap-effect"
+            title="Import Bet Slip"
+          >
+            <FileUp className="w-4 h-4 text-gold" />
+          </button>
           <button
             onClick={() => exportBetsCSV(filteredBets)}
             className="w-9 h-9 rounded-xl bg-surface card-border flex items-center justify-center hover:bg-surface-light transition-colors tap-effect"
