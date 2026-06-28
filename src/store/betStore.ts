@@ -16,6 +16,10 @@ import type {
   TournamentPerformance,
   TeamPerformance,
   PlayerPerformance,
+  BettingCircle,
+  CircleMember,
+  CircleBet,
+  CircleTransaction,
 } from '../types/types';
 import {
   mockBets,
@@ -70,6 +74,8 @@ interface BetState {
     selection: string;
     odds: number;
   };
+  circles: BettingCircle[];
+  activeCircleId: string | null;
 }
 
 interface BetActions {
@@ -92,6 +98,17 @@ interface BetActions {
   importBackup: (backup: any) => boolean;
   resetAllData: () => void;
   tickCricketEngine: () => void;
+  createCircle: (name: string, isPrivate: boolean) => void;
+  joinCircle: (inviteCode: string) => boolean;
+  circleDeposit: (circleId: string, memberName: string, amount: number) => void;
+  circleWithdraw: (circleId: string, memberName: string, amount: number) => void;
+  placeCircleBet: (
+    circleId: string,
+    bet: Omit<CircleBet, 'id' | 'placedBy' | 'status' | 'profitLoss' | 'timePlaced'>,
+    memberName: string,
+  ) => void;
+  settleCircleBet: (circleId: string, betId: string, status: 'won' | 'lost' | 'void') => void;
+  settleCircleBalances: (circleId: string) => void;
 }
 
 export type BetStore = BetState & BetActions;
@@ -114,6 +131,72 @@ function createHistoryEntry(
   };
 }
 
+// ── Mock Betting Circles Data ─────────────────────────────────────────
+
+const mockCircles: BettingCircle[] = [
+  {
+    id: 'circle-1',
+    name: 'IPL High Rollers',
+    inviteCode: 'IPL-HR-2026',
+    isPrivate: true,
+    pooledBalance: 82750,
+    members: [
+      { id: 'm-1', name: 'Rahul (You)', contribution: 25000, role: 'admin', joinedAt: '2026-03-01T12:00:00Z' },
+      { id: 'm-2', name: 'Amit', contribution: 25000, role: 'member', joinedAt: '2026-03-01T12:05:00Z' },
+      { id: 'm-3', name: 'Vikram', contribution: 25000, role: 'member', joinedAt: '2026-03-01T12:10:00Z' },
+    ],
+    bets: [
+      {
+        id: 'cbet-1',
+        matchId: 'match-1',
+        matchTitle: 'CSK vs MI',
+        selection: 'Chennai Super Kings',
+        marketType: 'Match Winner',
+        stake: 15000,
+        odds: 1.85,
+        placedBy: 'Amit',
+        status: 'won',
+        profitLoss: 12750,
+        timePlaced: '2026-06-27T18:30:00Z',
+      },
+      {
+        id: 'cbet-2',
+        matchId: 'match-2',
+        matchTitle: 'RCB vs KKR',
+        selection: 'Virat Kohli',
+        marketType: 'Top Batter',
+        stake: 5000,
+        odds: 3.4,
+        placedBy: 'Rahul (You)',
+        status: 'lost',
+        profitLoss: -5000,
+        timePlaced: '2026-06-27T19:00:00Z',
+      },
+    ],
+    transactions: [
+      { id: 'ctx-1', type: 'deposit', amount: 25000, memberName: 'Rahul (You)', timestamp: '2026-03-01T12:00:00Z', details: 'Initial contribution' },
+      { id: 'ctx-2', type: 'deposit', amount: 25000, memberName: 'Amit', timestamp: '2026-03-01T12:05:00Z', details: 'Initial contribution' },
+      { id: 'ctx-3', type: 'deposit', amount: 25000, memberName: 'Vikram', timestamp: '2026-03-01T12:10:00Z', details: 'Initial contribution' },
+    ],
+  },
+  {
+    id: 'circle-2',
+    name: 'Cricket Whales',
+    inviteCode: 'WHALES-99',
+    isPrivate: false,
+    pooledBalance: 150000,
+    members: [
+      { id: 'm-4', name: 'Rahul (You)', contribution: 100000, role: 'admin', joinedAt: '2026-04-10T10:00:00Z' },
+      { id: 'm-5', name: 'Suresh', contribution: 50000, role: 'member', joinedAt: '2026-04-10T10:15:00Z' },
+    ],
+    bets: [],
+    transactions: [
+      { id: 'ctx-4', type: 'deposit', amount: 100000, memberName: 'Rahul (You)', timestamp: '2026-04-10T10:00:00Z', details: 'Buy-in' },
+      { id: 'ctx-5', type: 'deposit', amount: 50000, memberName: 'Suresh', timestamp: '2026-04-10T10:15:00Z', details: 'Buy-in' },
+    ],
+  },
+];
+
 // ── localStorage corruption protection (safe sanitize) ───────────────
 
 function safeParseJSON<T>(value: string | null | undefined): T | null {
@@ -131,6 +214,7 @@ type PersistedShape = Partial<{
   bankrolls: unknown;
   transactions: unknown;
   bankrollHistory: unknown;
+  circles: unknown;
 }>;
 
 function sanitizePersistedState(
@@ -141,6 +225,7 @@ function sanitizePersistedState(
   bankrolls: Bankroll[];
   transactions: Transaction[];
   bankrollHistory: BankrollHistoryEntry[];
+  circles: BettingCircle[];
 } {
   const fallback = {
     bets: mockBets,
@@ -148,6 +233,7 @@ function sanitizePersistedState(
     bankrolls: mockBankrolls,
     transactions: mockTransactions,
     bankrollHistory: mockBankrollHistory,
+    circles: mockCircles,
   };
 
   if (!raw || typeof raw !== 'object') return fallback;
@@ -157,12 +243,14 @@ function sanitizePersistedState(
   const bankrollsRaw = (raw as any).bankrolls;
   const transactionsRaw = (raw as any).transactions;
   const bankrollHistoryRaw = (raw as any).bankrollHistory;
+  const circlesRaw = (raw as any).circles;
 
   const betsArr = Array.isArray(betsRaw) ? betsRaw : null;
   const matchesArr = Array.isArray(matchesRaw) ? matchesRaw : null;
   const bankrollsArr = Array.isArray(bankrollsRaw) ? bankrollsRaw : null;
   const transactionsArr = Array.isArray(transactionsRaw) ? transactionsRaw : null;
   const historyArr = Array.isArray(bankrollHistoryRaw) ? bankrollHistoryRaw : null;
+  const circlesArr = Array.isArray(circlesRaw) ? circlesRaw : null;
 
   const safeBet = (b: any): Bet | null => {
     if (!b || typeof b !== 'object') return null;
@@ -248,6 +336,7 @@ function sanitizePersistedState(
   const matches = matchesArr && matchesArr.length > 0 ? (matchesArr as any) : fallback.matches;
   const transactions = transactionsArr && transactionsArr.length >= 0 ? (transactionsArr as any) : fallback.transactions;
   const bankrollHistory = historyArr && historyArr.length >= 0 ? (historyArr as any) : fallback.bankrollHistory;
+  const circles = circlesArr && circlesArr.length >= 0 ? (circlesArr as any) : fallback.circles;
 
   return {
     bets: bets.length > 0 ? bets : fallback.bets,
@@ -255,6 +344,7 @@ function sanitizePersistedState(
     bankrolls: bankrolls.length > 0 ? bankrolls : fallback.bankrolls,
     transactions: Array.isArray(transactions) ? (transactions as any) : fallback.transactions,
     bankrollHistory: Array.isArray(bankrollHistory) ? (bankrollHistory as any) : fallback.bankrollHistory,
+    circles: Array.isArray(circles) ? (circles as any) : fallback.circles,
   };
 }
 
@@ -267,6 +357,8 @@ export const useBetStore = create<BetStore>()(
       bankrolls: mockBankrolls,
       transactions: mockTransactions,
       bankrollHistory: mockBankrollHistory,
+      circles: mockCircles,
+      activeCircleId: null,
 
       // UI state (NOT persisted)
       activeTab: 'home',
@@ -618,6 +710,7 @@ export const useBetStore = create<BetStore>()(
             bankrolls: mockBankrolls,
             transactions: mockTransactions,
             bankrollHistory: mockBankrollHistory,
+            circles: mockCircles,
           };
           return {
             bets: fallback.bets,
@@ -625,6 +718,8 @@ export const useBetStore = create<BetStore>()(
             bankrolls: fallback.bankrolls,
             transactions: fallback.transactions,
             bankrollHistory: fallback.bankrollHistory,
+            circles: fallback.circles,
+            activeCircleId: null,
           };
         }),
 
@@ -1247,12 +1342,270 @@ export const useBetStore = create<BetStore>()(
             ...(historyChanged ? { bankrollHistory: updatedHistory } : {}),
           };
         }),
+
+      createCircle: (name, isPrivate) =>
+        set((s) => {
+          const inviteCode = `INV-${name.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+          const newCircle: BettingCircle = {
+            id: `circle-${Date.now()}`,
+            name,
+            inviteCode,
+            isPrivate,
+            pooledBalance: 0,
+            members: [
+              {
+                id: 'm-1',
+                name: 'Rahul (You)',
+                contribution: 0,
+                role: 'admin',
+                joinedAt: new Date().toISOString(),
+              },
+            ],
+            bets: [],
+            transactions: [],
+          };
+          return { circles: [...s.circles, newCircle] };
+        }),
+
+      joinCircle: (inviteCode) => {
+        let success = false;
+        set((s) => {
+          const matchCircle = s.circles.find(
+            (c) => c.inviteCode.toUpperCase() === inviteCode.toUpperCase(),
+          );
+          if (!matchCircle) return {};
+
+          // Check if already a member
+          const exists = matchCircle.members.some((m) => m.name === 'Rahul (You)');
+          if (exists) {
+            success = true;
+            return {};
+          }
+
+          // Join circle
+          const updatedCircles = s.circles.map((c) => {
+            if (c.id === matchCircle.id) {
+              return {
+                ...c,
+                members: [
+                  ...c.members,
+                  {
+                    id: `m-${Date.now()}`,
+                    name: 'Rahul (You)',
+                    contribution: 0,
+                    role: 'member' as const,
+                    joinedAt: new Date().toISOString(),
+                  },
+                ],
+              };
+            }
+            return c;
+          });
+          success = true;
+          return { circles: updatedCircles };
+        });
+        return success;
+      },
+
+      circleDeposit: (circleId, memberName, amount) =>
+        set((s) => {
+          const updatedCircles = s.circles.map((c) => {
+            if (c.id === circleId) {
+              const updatedMembers = c.members.map((m) => {
+                if (m.name === memberName) {
+                  return { ...m, contribution: m.contribution + amount };
+                }
+                return m;
+              });
+
+              const tx: CircleTransaction = {
+                id: `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                type: 'deposit',
+                amount,
+                memberName,
+                timestamp: new Date().toISOString(),
+                details: 'Deposit to pooled balance',
+              };
+
+              return {
+                ...c,
+                pooledBalance: c.pooledBalance + amount,
+                members: updatedMembers,
+                transactions: [tx, ...c.transactions],
+              };
+            }
+            return c;
+          });
+          return { circles: updatedCircles };
+        }),
+
+      circleWithdraw: (circleId, memberName, amount) =>
+        set((s) => {
+          const updatedCircles = s.circles.map((c) => {
+            if (c.id === circleId) {
+              if (c.pooledBalance < amount) return c;
+
+              const updatedMembers = c.members.map((m) => {
+                if (m.name === memberName) {
+                  return { ...m, contribution: Math.max(0, m.contribution - amount) };
+                }
+                return m;
+              });
+
+              const tx: CircleTransaction = {
+                id: `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                type: 'withdrawal',
+                amount,
+                memberName,
+                timestamp: new Date().toISOString(),
+                details: 'Withdrawal from pooled balance',
+              };
+
+              return {
+                ...c,
+                pooledBalance: c.pooledBalance - amount,
+                members: updatedMembers,
+                transactions: [tx, ...c.transactions],
+              };
+            }
+            return c;
+          });
+          return { circles: updatedCircles };
+        }),
+
+      placeCircleBet: (circleId, bet, memberName) =>
+        set((s) => {
+          const updatedCircles = s.circles.map((c) => {
+            if (c.id === circleId) {
+              if (c.pooledBalance < bet.stake) return c; // insufficient funds
+
+              const newBet: CircleBet = {
+                ...bet,
+                id: `cbet-${Date.now()}`,
+                placedBy: memberName,
+                status: 'running',
+                profitLoss: 0,
+                timePlaced: new Date().toISOString(),
+              };
+
+              const tx: CircleTransaction = {
+                id: `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                type: 'withdrawal',
+                amount: bet.stake,
+                memberName,
+                timestamp: new Date().toISOString(),
+                details: `Stake: ${bet.selection} (${bet.marketType})`,
+              };
+
+              return {
+                ...c,
+                pooledBalance: c.pooledBalance - bet.stake,
+                bets: [newBet, ...c.bets],
+                transactions: [tx, ...c.transactions],
+              };
+            }
+            return c;
+          });
+          return { circles: updatedCircles };
+        }),
+
+      settleCircleBet: (circleId, betId, status) =>
+        set((s) => {
+          const updatedCircles = s.circles.map((c) => {
+            if (c.id === circleId) {
+              const bet = c.bets.find((b) => b.id === betId);
+              if (!bet || bet.status !== 'running') return c;
+
+              let profitLoss = 0;
+              let returnAmt = 0;
+              if (status === 'won') {
+                profitLoss = bet.stake * (bet.odds - 1);
+                returnAmt = bet.stake * bet.odds;
+              } else if (status === 'lost') {
+                profitLoss = -bet.stake;
+                returnAmt = 0;
+              } else {
+                profitLoss = 0;
+                returnAmt = bet.stake; // void, return stake
+              }
+
+              const updatedBets = c.bets.map((b) => {
+                if (b.id === betId) {
+                  return { ...b, status, profitLoss };
+                }
+                return b;
+              });
+
+              let txs = [...c.transactions];
+              if (returnAmt > 0) {
+                const tx: CircleTransaction = {
+                  id: `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  type: status === 'won' ? 'deposit' : 'deposit',
+                  amount: returnAmt,
+                  memberName: bet.placedBy,
+                  timestamp: new Date().toISOString(),
+                  details:
+                    status === 'won'
+                      ? `Won bet payout: ${bet.selection}`
+                      : `Void bet refund: ${bet.selection}`,
+                };
+                txs = [tx, ...txs];
+              }
+
+              return {
+                ...c,
+                pooledBalance: c.pooledBalance + returnAmt,
+                bets: updatedBets,
+                transactions: txs,
+              };
+            }
+            return c;
+          });
+          return { circles: updatedCircles };
+        }),
+
+      settleCircleBalances: (circleId) =>
+        set((s) => {
+          const updatedCircles = s.circles.map((c) => {
+            if (c.id === circleId) {
+              const totalContributions = c.members.reduce((sum, m) => sum + m.contribution, 0);
+              const txs: CircleTransaction[] = [];
+
+              const updatedMembers = c.members.map((m) => {
+                const ratio =
+                  totalContributions > 0 ? m.contribution / totalContributions : 1 / c.members.length;
+                const share = c.pooledBalance * ratio;
+
+                txs.push({
+                  id: `ctx-${Date.now()}-${m.id}`,
+                  type: 'distribution',
+                  amount: share,
+                  memberName: m.name,
+                  timestamp: new Date().toISOString(),
+                  details: `Settlement distribution (Deposited: ₹${m.contribution.toLocaleString(
+                    'en-IN',
+                  )})`,
+                });
+
+                return { ...m, contribution: 0 };
+              });
+
+              return {
+                ...c,
+                pooledBalance: 0,
+                members: updatedMembers,
+                transactions: [...txs, ...c.transactions],
+              };
+            }
+            return c;
+          });
+          return { circles: updatedCircles };
+        }),
     }),
     {
       name: 'betkhaata-store',
       version: 1,
       migrate: (persisted: any) => {
-        // zustand persist passes already-parsed data in most cases, but if storage got corrupted we still guard.
         try {
           const parsed = safeParseJSON<PersistedShape>(persisted) || (persisted as PersistedShape);
           return sanitizePersistedState(parsed);
@@ -1267,6 +1620,7 @@ export const useBetStore = create<BetStore>()(
         bankrolls: state.bankrolls,
         transactions: state.transactions,
         bankrollHistory: state.bankrollHistory,
+        circles: state.circles,
       }),
     },
   ),

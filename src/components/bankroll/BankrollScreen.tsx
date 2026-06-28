@@ -18,9 +18,11 @@ import {
 import { useBetStore, selectTotalBalance, selectTotalExposure, selectAnalytics } from '../../store/betStore';
 import { formatCurrency, formatCurrencyWithSign } from '../../utils/utils';
 import BankrollDetailCard from './BankrollDetailCard';
+import BettingCirclesDashboard from './BettingCirclesDashboard';
 import dayjs from 'dayjs';
 
 export default function BankrollScreen() {
+  const [activeSubTab, setActiveSubTab] = useState<'personal' | 'circles'>('personal');
   const bankrolls = useBetStore((s) => s.bankrolls || []);
   const totalBalance = useBetStore(selectTotalBalance);
   const totalExposure = useBetStore(selectTotalExposure);
@@ -137,7 +139,33 @@ export default function BankrollScreen() {
   return (
     <div className="px-4 py-4 w-full max-w-[430px] md:max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
       
-      {/* LEFT COLUMN: Overview & Quick Actions & Data Settings */}
+      {/* Top View Toggle */}
+      <div className="col-span-full flex border-b border-white/[0.04] pb-1.5 mb-2">
+        <button
+          onClick={() => setActiveSubTab('personal')}
+          className={`pb-2 px-4 text-xs font-bold transition-all relative ${
+            activeSubTab === 'personal'
+              ? 'text-white border-b-2 border-gold font-extrabold'
+              : 'text-dim hover:text-white'
+          }`}
+        >
+          Personal Bankrolls
+        </button>
+        <button
+          onClick={() => setActiveSubTab('circles')}
+          className={`pb-2 px-4 text-xs font-bold transition-all relative ${
+            activeSubTab === 'circles'
+              ? 'text-white border-b-2 border-gold font-extrabold'
+              : 'text-dim hover:text-white'
+          }`}
+        >
+          Betting Circles (Group)
+        </button>
+      </div>
+
+      {activeSubTab === 'personal' ? (
+        <>
+          {/* LEFT COLUMN: Overview & Quick Actions & Data Settings */}
       <div className="space-y-4 lg:col-span-1">
         <div>
           <h2 className="text-lg font-bold">Bankroll Center</h2>
@@ -377,6 +405,12 @@ export default function BankrollScreen() {
           </div>
         </div>
       </div>
+      </>
+      ) : (
+        <div className="col-span-full">
+          <BettingCirclesDashboard />
+        </div>
+      )}
 
       {/* Safety Factory Reset Dialog / Modal */}
       {showResetModal && (

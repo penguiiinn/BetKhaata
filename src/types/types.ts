@@ -240,6 +240,46 @@ export interface MatchLiveData {
   partnershipRuns: number;
   partnershipBalls: number;
   sessionMarkets: LiveMarket[];
+}// ── Betting Circle Types ──────────────────────────────────────────────
+
+export interface CircleMember {
+  id: string;
+  name: string;
+  contribution: number; // initial contribution to the pooled balance
+  role: 'admin' | 'member';
+  joinedAt: string;
 }
 
+export interface CircleBet {
+  id: string;
+  matchId: string;
+  matchTitle: string;
+  selection: string;
+  marketType: string;
+  stake: number;
+  odds: number;
+  placedBy: string; // member name
+  status: 'running' | 'won' | 'lost' | 'void';
+  profitLoss: number;
+  timePlaced: string;
+}
 
+export interface CircleTransaction {
+  id: string;
+  type: 'deposit' | 'withdrawal' | 'distribution';
+  amount: number;
+  memberName: string;
+  timestamp: string;
+  details?: string;
+}
+
+export interface BettingCircle {
+  id: string;
+  name: string;
+  inviteCode: string;
+  isPrivate: boolean;
+  pooledBalance: number;
+  members: CircleMember[];
+  bets: CircleBet[];
+  transactions: CircleTransaction[];
+}
