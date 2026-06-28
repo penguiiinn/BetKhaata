@@ -20,6 +20,7 @@ import type {
   CircleMember,
   CircleBet,
   CircleTransaction,
+  MatchLiveData,
 } from '../types/types';
 import {
   mockBets,
@@ -908,7 +909,7 @@ export const useBetStore = create<BetStore>()(
             }
 
             // 2. Simulate ball update
-            const ld = { ...m.liveData };
+            const ld = { ...m.liveData } as MatchLiveData;
             const batsmen = ld.batsmen.map((b) => ({ ...b }));
             const bowlers = ld.bowlers.map((b) => ({ ...b }));
 
