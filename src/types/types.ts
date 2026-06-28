@@ -80,6 +80,7 @@ export interface Bet {
   status: BetStatus;
   profitLoss: number;
   bankrollId: string;
+  stage?: 'league' | 'playoffs' | 'finals';
 }
 
 export interface BankrollLimits {

@@ -294,6 +294,7 @@ function sanitizePersistedState(
       status,
       profitLoss,
       bankrollId: b.bankrollId,
+      stage: typeof b.stage === 'string' ? (b.stage as any) : 'league',
     };
   };
 

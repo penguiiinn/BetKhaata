@@ -19,6 +19,7 @@ export default function EditBetModal() {
     stake: '',
     odds: '',
     marketType: 'Match Winner' as MarketType,
+    stage: 'league' as 'league' | 'playoffs' | 'finals',
   });
   const [error, setError] = useState('');
 
@@ -30,6 +31,7 @@ export default function EditBetModal() {
         stake: bet.stake.toString(),
         odds: bet.odds.toString(),
         marketType: bet.marketType,
+        stage: bet.stage || 'league',
       });
       setError('');
     }
@@ -65,6 +67,7 @@ export default function EditBetModal() {
       stake: newStake,
       odds: newOdds,
       marketType: formData.marketType,
+      stage: formData.stage,
     });
 
     setEditBetId(null);
@@ -171,6 +174,25 @@ export default function EditBetModal() {
               required
             />
           </div>
+        </div>
+        {/* Stage */}
+        <div>
+          <label className="text-[11px] text-muted font-medium uppercase tracking-wider block mb-1.5">
+            Tournament Stage
+          </label>
+          <select
+            className="select-dark"
+            value={formData.stage}
+            onChange={(e) => {
+              setFormData((f) => ({ ...f, stage: e.target.value as any }));
+              setError('');
+            }}
+            required
+          >
+            <option value="league">League / Group Stage</option>
+            <option value="playoffs">Playoffs / Semis</option>
+            <option value="finals">Finals</option>
+          </select>
         </div>
 
         {/* Potential return preview */}

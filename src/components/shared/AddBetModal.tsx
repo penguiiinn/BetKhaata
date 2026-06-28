@@ -26,6 +26,7 @@ export default function AddBetModal() {
     stake: '',
     odds: '',
     bankrollId: '',
+    stage: 'league' as 'league' | 'playoffs' | 'finals',
   });
   const [error, setError] = useState('');
   
@@ -96,6 +97,7 @@ export default function AddBetModal() {
       status: 'running',
       profitLoss: 0,
       bankrollId: formData.bankrollId,
+      stage: formData.stage,
     });
 
     // Reset & close
@@ -106,6 +108,7 @@ export default function AddBetModal() {
       stake: '',
       odds: '',
       bankrollId: '',
+      stage: 'league',
     });
     setError('');
     setSelectedMatchId(null);
@@ -252,6 +255,26 @@ export default function AddBetModal() {
             </div>
           </div>
         )}
+
+        {/* Stage */}
+        <div>
+          <label className="text-[11px] text-muted font-medium uppercase tracking-wider block mb-1.5">
+            Tournament Stage
+          </label>
+          <select
+            className="select-dark"
+            value={formData.stage}
+            onChange={(e) => {
+              setFormData((f) => ({ ...f, stage: e.target.value as any }));
+              setError('');
+            }}
+            required
+          >
+            <option value="league">League / Group Stage</option>
+            <option value="playoffs">Playoffs / Semis</option>
+            <option value="finals">Finals</option>
+          </select>
+        </div>
 
         {/* Bankroll */}
         <div>

@@ -15,13 +15,14 @@ import WinRateChart from './WinRateChart';
 import DailyPnLChart from './DailyPnLChart';
 import PerformanceBreakdown from './PerformanceBreakdown';
 import RiskInsightsDashboard from './RiskInsightsDashboard';
+import TournamentDashboard from './TournamentDashboard';
 import { hourlyBettingData, lossChaseWarning, dailyPnLData } from '../../data/mockData';
 import { useBetStore, selectAnalytics, selectBankrollGrowthData, selectDailyPnLFromBets, selectMarketPerformance } from '../../store/betStore';
 import { formatCurrency, formatCurrencyWithSign, exportBankrollHistoryCSV } from '../../utils/utils';
 import dayjs from 'dayjs';
 
 export default function InsightsScreen() {
-  const [activeView, setActiveView] = useState<'analytics' | 'risk'>('analytics');
+  const [activeView, setActiveView] = useState<'analytics' | 'risk' | 'tournament'>('analytics');
   const analytics = useBetStore(selectAnalytics);
 
   return (
@@ -56,6 +57,16 @@ export default function InsightsScreen() {
           }`}
         >
           Risk & Discipline
+        </button>
+        <button
+          onClick={() => setActiveView('tournament')}
+          className={`pb-2 px-4 text-xs font-bold transition-all relative ${
+            activeView === 'tournament'
+              ? 'text-white border-b-2 border-gold font-extrabold'
+              : 'text-dim hover:text-white'
+          }`}
+        >
+          Tournament Mode
         </button>
       </div>
 
@@ -135,9 +146,13 @@ export default function InsightsScreen() {
             <PerformanceBreakdown />
           </div>
         </>
-      ) : (
+      ) : activeView === 'risk' ? (
         <div className="col-span-full">
           <RiskInsightsDashboard />
+        </div>
+      ) : (
+        <div className="col-span-full">
+          <TournamentDashboard />
         </div>
       )}
     </div>
