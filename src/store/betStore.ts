@@ -1626,7 +1626,7 @@ export const useBetStore = create<BetStore>()(
                 liveData: liveDataAny
                   ? {
                       ...liveDataAny,
-                      innings: liveDataAny.innings === 2 ? 2 : 1 as 1 | 2,
+                      innings: (liveDataAny.innings === 2 ? 2 : 1) as 1 | 2,
                     }
                   : undefined,
               };
@@ -1644,7 +1644,7 @@ export const useBetStore = create<BetStore>()(
                   ...m,
                   liveData: {
                     ...liveDataAny,
-                    innings: liveDataAny.innings === 2 ? 2 : 1 as 1 | 2,
+                    innings: (liveDataAny.innings === 2 ? 2 : 1) as 1 | 2,
                   },
                 };
               }
