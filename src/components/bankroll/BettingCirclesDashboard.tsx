@@ -31,6 +31,7 @@ export default function BettingCirclesDashboard() {
   const settleCircleBet = useBetStore((s) => s.settleCircleBet);
   const settleCircleBalances = useBetStore((s) => s.settleCircleBalances);
   const matches = useBetStore((s) => s.matches);
+  const activeMatches = useMemo(() => (matches || []).filter((m) => m.status !== 'finished'), [matches]);
 
   // Active Circle selection
   const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);

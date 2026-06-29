@@ -888,7 +888,7 @@ export const useBetStore = create<BetStore>()(
                   overs: '0.0',
                 },
                 liveData: {
-                  innings: 1,
+                  innings: 1 as 1 | 2,
                   battingTeam: m.team1.shortName,
                   bowlingTeam: m.team2.shortName,
                   oversBowled: 0.0,
@@ -951,7 +951,7 @@ export const useBetStore = create<BetStore>()(
               };
               bowlers[bowlerIdx] = {
                 ...bowlers[bowlerIdx],
-                wickets: bowlers[bowlerIdx].wickets + 1,
+                wickets: (bowlers[bowlerIdx].wickets ?? 0) + 1,
               };
 
               // Wickets in session check
@@ -1077,7 +1077,7 @@ export const useBetStore = create<BetStore>()(
 
               bowlers[bowlerIdx] = {
                 ...bowlers[bowlerIdx],
-                runsConceded: bowlers[bowlerIdx].runsConceded + runs,
+                runsConceded: (bowlers[bowlerIdx].runsConceded ?? 0) + runs,
               };
 
               // Rotate strike on odd runs
