@@ -35,6 +35,7 @@ import {
   compileWeeklyReport,
 } from '../utils/riskDetector';
 import { computeStreaks, isThisWeek, isToday } from '../utils/utils';
+import { fetchLiveMatches } from '../services/liveCricketService';
 
 // ── Filter & Modal Types ──────────────────────────────────────────────
 
@@ -115,6 +116,7 @@ interface BetActions {
   ) => void;
   settleCircleBet: (circleId: string, betId: string, status: 'won' | 'lost' | 'void') => void;
   settleCircleBalances: (circleId: string) => void;
+  refreshCricketMatches: () => Promise<void>;
 }
 
 export type BetStore = BetState & BetActions;
@@ -357,7 +359,7 @@ function sanitizePersistedState(
 
 export const useBetStore = create<BetStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Data
       bets: mockBets,
       matches: mockMatches,
@@ -1608,6 +1610,53 @@ export const useBetStore = create<BetStore>()(
           });
           return { circles: updatedCircles };
         }),
+
+      refreshCricketMatches: async () => {
+        try {
+          const apiMatches = await fetchLiveMatches();
+          const currentMatches = get().matches;
+
+          const updatedExisting = currentMatches.map((m) => {
+            if (m.status === 'finished') return m;
+            const apiMatch = apiMatches.find((x) => x.id === m.id);
+            if (apiMatch) {
+              const liveDataAny = (m.liveData || apiMatch.liveData) as any;
+              return {
+                ...apiMatch,
+                liveData: liveDataAny
+                  ? {
+                      ...liveDataAny,
+                      innings: liveDataAny.innings === 2 ? 2 : 1 as 1 | 2,
+                    }
+                  : undefined,
+              };
+            }
+            return m;
+          });
+
+          const existingIds = new Set(updatedExisting.map((m) => m.id));
+          const newMatches = apiMatches
+            .filter((m) => !existingIds.has(m.id))
+            .map((m) => {
+              if (m.liveData) {
+                const liveDataAny = m.liveData as any;
+                return {
+                  ...m,
+                  liveData: {
+                    ...liveDataAny,
+                    innings: liveDataAny.innings === 2 ? 2 : 1 as 1 | 2,
+                  },
+                };
+              }
+              return m;
+            });
+
+          const nextMatches = [...updatedExisting, ...newMatches];
+          set({ matches: nextMatches });
+        } catch (err) {
+          console.error('[betStore] Error refreshing matches:', err);
+        }
+      },
     }),
     {
       name: 'betkhaata-store',
