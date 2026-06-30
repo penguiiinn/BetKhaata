@@ -1612,8 +1612,16 @@ export const useBetStore = create<BetStore>()(
         }),
 
       refreshCricketMatches: async () => {
+        console.log('[betStore] refreshCricketMatches(): starting matches fetch...');
         try {
           const apiMatches = await fetchLiveMatches();
+          console.log('[betStore] refreshCricketMatches(): fetch complete. Received matches count =', apiMatches.length);
+
+          if (apiMatches.length === 0) {
+            console.log('[betStore] refreshCricketMatches(): fetch returned empty list. Keeping existing fallback matches.');
+            return;
+          }
+
           const currentMatches = get().matches;
 
           const updatedExisting = currentMatches.map((m) => {
@@ -1652,9 +1660,10 @@ export const useBetStore = create<BetStore>()(
             });
 
           const nextMatches = [...updatedExisting, ...newMatches];
+          console.log('[betStore] refreshCricketMatches(): updated matches set successfully. Next total matches count =', nextMatches.length);
           set({ matches: nextMatches });
         } catch (err) {
-          console.error('[betStore] Error refreshing matches:', err);
+          console.error('[betStore] refreshCricketMatches(): error caught =', err);
         }
       },
     }),

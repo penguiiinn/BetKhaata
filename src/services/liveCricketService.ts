@@ -196,56 +196,91 @@ function formatVenueAndStart($: cheerio.CheerioAPI, $root: any): { venue?: strin
 // =========================
 
 export async function fetchLiveMatches(): Promise<Match[]> {
+    console.log('[liveCricketService] fetchLiveMatches(): starting HTTP request...');
     if (_matchListCache && withinTtl(_matchListCache.ts, MATCH_LIST_TTL_MS)) {
+        console.log('[liveCricketService] fetchLiveMatches(): returning cached matches count =', _matchListCache.value.length);
         return _matchListCache.value;
     }
 
     const endpoint = `${CRICBUZZ_BASE_URL}/cricket-scores/`;
-    console.log('[liveCricketService] fetchLiveMatches(): request endpoint=', endpoint);
+    let html = '';
+    let success = false;
 
+    // Try direct fetch first
     try {
+        console.log('[liveCricketService] fetchLiveMatches(): Attempting direct GET to', endpoint);
         const res = await axios.get(endpoint, {
-            timeout: 12_000,
+            timeout: 6000,
             headers: {
-                // Cricbuzz is sensitive to user-agent
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
                 Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             },
         });
+        html = res.data;
+        success = true;
+        console.log('[liveCricketService] fetchLiveMatches(): Direct GET succeeded. HTML length =', html.length);
+    } catch (err: any) {
+        console.warn('[liveCricketService] fetchLiveMatches(): Direct GET failed (likely CORS or network). Error:', err?.message || err);
+    }
 
-        console.log('[liveCricketService] fetchLiveMatches(): raw axios status=', res?.status);
-        console.log(
-            '[liveCricketService] fetchLiveMatches(): raw response content-type=',
-            res?.headers?.['content-type'],
-        );
-        console.log('[liveCricketService] fetchLiveMatches(): raw response length=', typeof res?.data === 'string' ? res.data.length : undefined);
+    // Try AllOrigins CORS Proxy if direct failed
+    if (!success) {
+        try {
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(endpoint)}`;
+            console.log('[liveCricketService] fetchLiveMatches(): Attempting GET via AllOrigins Proxy:', proxyUrl);
+            const res = await axios.get(proxyUrl, { timeout: 8000 });
+            html = res.data;
+            success = true;
+            console.log('[liveCricketService] fetchLiveMatches(): AllOrigins Proxy succeeded. HTML length =', html.length);
+        } catch (err: any) {
+            console.warn('[liveCricketService] fetchLiveMatches(): AllOrigins Proxy failed. Error:', err?.message || err);
+        }
+    }
 
-        const $ = cheerio.load(res.data);
+    // Try CorsProxy.io if AllOrigins failed
+    if (!success) {
+        try {
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
+            console.log('[liveCricketService] fetchLiveMatches(): Attempting GET via CorsProxy.io:', proxyUrl);
+            const res = await axios.get(proxyUrl, { timeout: 8000 });
+            html = res.data;
+            success = true;
+            console.log('[liveCricketService] fetchLiveMatches(): CorsProxy.io succeeded. HTML length =', html.length);
+        } catch (err: any) {
+            console.error('[liveCricketService] fetchLiveMatches(): All fallback requests failed. Error:', err?.message || err);
+            return [];
+        }
+    }
 
-        // Cricbuzz scores page typically has match cards/rows.
-        // We try to locate anchor tags that contain '/match/' and 'live-cricket-score'
-        const matchAnchors = $('a[href*="/match/"]').toArray();
-
+    try {
+        const $ = cheerio.load(html);
+        const matchAnchors = $('a').toArray();
         const seen = new Set<string>();
         const matches: Match[] = [];
+
+        console.log('[liveCricketService] fetchLiveMatches(): total anchors found =', matchAnchors.length);
 
         for (const a of matchAnchors) {
             const href = $(a).attr('href');
             if (!href) continue;
-            if (!href.includes('live-cricket-score') && !href.includes('cricket-score')) continue;
+
+            // Check if it's a match page link
+            if (!href.includes('/live-cricket-scores/') && 
+                !href.includes('/cricket-scores/') && 
+                !href.includes('/cricket-scorecard/') && 
+                !href.includes('/live-cricket-score/') &&
+                !href.includes('/match/')) {
+                continue;
+            }
 
             const matchId = buildMatchIdFromUrl(href);
             if (!matchId || seen.has(matchId)) continue;
 
             const cardText = normalizeWhitespace($(a).text());
-            if (!cardText) continue;
-
-            // Teams: attempt to pull two team names from text around the match anchor.
-            // This is heuristic; we'll fallback to substrings or empty names.
             const title = $(a).attr('title') || cardText;
+            if (!title && !cardText) continue;
 
-            // Try to split teams by ' vs ' or ' - '
+            // Extract team names
             let team1Name = '';
             let team2Name = '';
             const vsMatch = title.match(/(.+?)\s*(?:v|vs|VS)\s*(.+)/i);
@@ -253,31 +288,56 @@ export async function fetchLiveMatches(): Promise<Match[]> {
                 team1Name = normalizeWhitespace(vsMatch[1]);
                 team2Name = normalizeWhitespace(vsMatch[2]);
             } else {
-                // Fallback: take first two capitalized words/groups
                 const parts = title.split(/[\-–|•]/g).map((p) => normalizeWhitespace(p));
                 if (parts.length >= 2) {
                     team1Name = parts[0];
                     team2Name = parts[1];
+                } else {
+                    // Try parsing from cardText
+                    const vsMatch2 = cardText.match(/(.+?)\s*(?:v|vs|VS)\s*(.+)/i);
+                    if (vsMatch2) {
+                        team1Name = normalizeWhitespace(vsMatch2[1]);
+                        team2Name = normalizeWhitespace(vsMatch2[2]);
+                    }
                 }
             }
 
-            // Status: infer from nearby text
-            const statusText = normalizeWhitespace($(a).closest('li, div, tr').text());
-            const status = inferStatus(statusText, !!statusText.match(/\d+\s*\/\s*\d+/));
+            // Cleanup team names (e.g. MI vs CSK 29th Match)
+            // Remove text like "Match 29", "Commentary", "Scorecard", etc.
+            const cleanTeam = (name: string) => {
+                return name
+                    .replace(/Match\s+\d+/i, '')
+                    .replace(/\d+(st|nd|rd|th)\s+Match/i, '')
+                    .replace(/Commentary|Scorecard|Highlights|Live/gi, '')
+                    .replace(/,/g, '')
+                    .trim();
+            };
 
-            // Tournament / format: heuristic
-            const tournamentText = normalizeWhitespace($(a).closest('li, div, tr').find('[class*="cb-series" i], [class*="series" i]').text());
-            const format = parseFormatFromText(statusText + ' ' + (tournamentText || cardText));
+            team1Name = cleanTeam(team1Name);
+            team2Name = cleanTeam(team2Name);
 
+            // Status: infer from surrounding container
+            const containerText = normalizeWhitespace($(a).closest('li, div, tr, td').text());
+            const status = inferStatus(containerText, !!containerText.match(/\d+\s*\/\s*\d+/));
+            const format = parseFormatFromText(containerText + ' ' + title);
+
+            // Series/Tournament
+            const tournamentText = normalizeWhitespace(
+                $(a).closest('li, div, tr').find('[class*="cb-series" i], [class*="series" i], [class*="hdr" i]').text()
+            );
             const tournament = tournamentText || 'Live Cricket';
-
-            // Start time and venue usually absent from list; keep safe defaults.
             const { venue } = formatVenueAndStart($, $(a));
 
             const match: Match = {
                 id: matchId,
-                team1: { name: team1Name || 'Team 1', shortName: team1Name ? team1Name.split(' ').map((w) => w[0]).join('').slice(0, 3).toUpperCase() : 'T1' },
-                team2: { name: team2Name || 'Team 2', shortName: team2Name ? team2Name.split(' ').map((w) => w[0]).join('').slice(0, 3).toUpperCase() : 'T2' },
+                team1: { 
+                    name: team1Name || 'Team 1', 
+                    shortName: team1Name ? team1Name.split(' ').map((w) => w[0]).join('').slice(0, 3).toUpperCase() : 'T1' 
+                },
+                team2: { 
+                    name: team2Name || 'Team 2', 
+                    shortName: team2Name ? team2Name.split(' ').map((w) => w[0]).join('').slice(0, 3).toUpperCase() : 'T2' 
+                },
                 tournament,
                 format,
                 status,
@@ -285,9 +345,7 @@ export async function fetchLiveMatches(): Promise<Match[]> {
                 venue: venue || '',
             };
 
-            // Try score extraction from text around the anchor
-            const scoreText = normalizeWhitespace($(a).closest('li, div, tr').find('span, div, p').text());
-            const score = parseScoreFromText(scoreText);
+            const score = parseScoreFromText(containerText);
             if (score && (score.team1Score || score.team2Score || score.result)) {
                 match.score = score;
             }
@@ -298,13 +356,11 @@ export async function fetchLiveMatches(): Promise<Match[]> {
             if (matches.length >= 12) break;
         }
 
-        // Ensure stable non-empty output to keep UI happy
-        const finalMatches = matches.length ? matches : [];
-
-        _matchListCache = { value: finalMatches, ts: nowMs() };
-        return finalMatches;
-    } catch {
-        _matchListCache = { value: [], ts: nowMs() };
+        console.log('[liveCricketService] fetchLiveMatches(): successfully parsed matches count =', matches.length);
+        _matchListCache = { value: matches, ts: nowMs() };
+        return matches;
+    } catch (err: any) {
+        console.error('[liveCricketService] fetchLiveMatches(): Parsing error caught:', err);
         return [];
     }
 }
