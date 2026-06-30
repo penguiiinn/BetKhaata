@@ -248,7 +248,7 @@ export async function fetchLiveMatches(): Promise<Match[]> {
             console.log('[liveCricketService] fetchLiveMatches(): CorsProxy.io succeeded. HTML length =', html.length);
         } catch (err: any) {
             console.error('[liveCricketService] fetchLiveMatches(): All fallback requests failed. Error:', err?.message || err);
-            return [];
+            throw err;
         }
     }
 
@@ -361,7 +361,7 @@ export async function fetchLiveMatches(): Promise<Match[]> {
         return matches;
     } catch (err: any) {
         console.error('[liveCricketService] fetchLiveMatches(): Parsing error caught:', err);
-        return [];
+        throw err;
     }
 }
 

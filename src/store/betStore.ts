@@ -236,12 +236,12 @@ function sanitizePersistedState(
   circles: BettingCircle[];
 } {
   const fallback = {
-    bets: mockBets,
-    matches: mockMatches,
-    bankrolls: mockBankrolls,
-    transactions: mockTransactions,
-    bankrollHistory: mockBankrollHistory,
-    circles: mockCircles,
+    bets: [] as Bet[],
+    matches: mockMatches.filter((m) => m.status === 'finished'),
+    bankrolls: [] as Bankroll[],
+    transactions: [] as Transaction[],
+    bankrollHistory: [] as BankrollHistoryEntry[],
+    circles: [] as BettingCircle[],
   };
 
   if (!raw || typeof raw !== 'object') return fallback;
@@ -259,6 +259,13 @@ function sanitizePersistedState(
   const transactionsArr = Array.isArray(transactionsRaw) ? transactionsRaw : null;
   const historyArr = Array.isArray(bankrollHistoryRaw) ? bankrollHistoryRaw : null;
   const circlesArr = Array.isArray(circlesRaw) ? circlesRaw : null;
+
+  // Clear seeded mock data if detected
+  const hasMockBankrolls = bankrollsArr && bankrollsArr.some((b: any) => b && (b.id === 'bankroll-1' || b.id === 'bankroll-2'));
+  const hasMockCircles = circlesArr && circlesArr.some((c: any) => c && (c.id === 'circle-1' || c.id === 'circle-2'));
+  if (hasMockBankrolls || hasMockCircles) {
+    return fallback;
+  }
 
   const safeBet = (b: any): Bet | null => {
     if (!b || typeof b !== 'object') return null;
@@ -361,12 +368,12 @@ export const useBetStore = create<BetStore>()(
   persist(
     (set, get) => ({
       // Data
-      bets: mockBets,
-      matches: mockMatches,
-      bankrolls: mockBankrolls,
-      transactions: mockTransactions,
-      bankrollHistory: mockBankrollHistory,
-      circles: mockCircles,
+      bets: [] as Bet[],
+      matches: mockMatches.filter((m) => m.status === 'finished') as Match[],
+      bankrolls: [] as Bankroll[],
+      transactions: [] as Transaction[],
+      bankrollHistory: [] as BankrollHistoryEntry[],
+      circles: [] as BettingCircle[],
       activeCircleId: null,
 
       // UI state (NOT persisted)
@@ -714,12 +721,12 @@ export const useBetStore = create<BetStore>()(
       resetAllData: () =>
         set(() => {
           const fallback = {
-            bets: mockBets,
-            matches: mockMatches,
-            bankrolls: mockBankrolls,
-            transactions: mockTransactions,
-            bankrollHistory: mockBankrollHistory,
-            circles: mockCircles,
+            bets: [] as Bet[],
+            matches: mockMatches.filter((m) => m.status === 'finished') as Match[],
+            bankrolls: [] as Bankroll[],
+            transactions: [] as Transaction[],
+            bankrollHistory: [] as BankrollHistoryEntry[],
+            circles: [] as BettingCircle[],
           };
           return {
             bets: fallback.bets,
@@ -1617,53 +1624,32 @@ export const useBetStore = create<BetStore>()(
           const apiMatches = await fetchLiveMatches();
           console.log('[betStore] refreshCricketMatches(): fetch complete. Received matches count =', apiMatches.length);
 
-          if (apiMatches.length === 0) {
-            console.log('[betStore] refreshCricketMatches(): fetch returned empty list. Keeping existing fallback matches.');
-            return;
-          }
-
           const currentMatches = get().matches;
+          const finishedMatches = currentMatches.filter((m) => m.status === 'finished');
 
-          const updatedExisting = currentMatches.map((m) => {
-            if (m.status === 'finished') return m;
-            const apiMatch = apiMatches.find((x) => x.id === m.id);
-            if (apiMatch) {
-              const liveDataAny = (m.liveData || apiMatch.liveData) as any;
+          const nextApiMatches = apiMatches.map((m) => {
+            if (m.liveData) {
+              const liveDataAny = m.liveData as any;
               return {
-                ...apiMatch,
-                liveData: liveDataAny
-                  ? {
-                      ...liveDataAny,
-                      innings: (liveDataAny.innings === 2 ? 2 : 1) as 1 | 2,
-                    }
-                  : undefined,
+                ...m,
+                liveData: {
+                  ...liveDataAny,
+                  innings: (liveDataAny.innings === 2 ? 2 : 1) as 1 | 2,
+                },
               };
             }
             return m;
           });
 
-          const existingIds = new Set(updatedExisting.map((m) => m.id));
-          const newMatches = apiMatches
-            .filter((m) => !existingIds.has(m.id))
-            .map((m) => {
-              if (m.liveData) {
-                const liveDataAny = m.liveData as any;
-                return {
-                  ...m,
-                  liveData: {
-                    ...liveDataAny,
-                    innings: (liveDataAny.innings === 2 ? 2 : 1) as 1 | 2,
-                  },
-                };
-              }
-              return m;
-            });
-
-          const nextMatches = [...updatedExisting, ...newMatches];
+          const nextMatches = [...finishedMatches, ...nextApiMatches];
           console.log('[betStore] refreshCricketMatches(): updated matches set successfully. Next total matches count =', nextMatches.length);
           set({ matches: nextMatches });
         } catch (err) {
-          console.error('[betStore] refreshCricketMatches(): error caught =', err);
+          console.error('[betStore] refreshCricketMatches(): fetch failed. Logged exact error =', err);
+          const currentMatches = get().matches;
+          const finishedMatches = currentMatches.filter((m) => m.status === 'finished');
+          set({ matches: finishedMatches });
+          throw err;
         }
       },
     }),
